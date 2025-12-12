@@ -2,10 +2,9 @@ import cv2
 import time
 from ultralytics import YOLO
 import torch
+import argparse
 
 # --- CONFIGURATION ---
-INPUT_VIDEO = "two_cars_south.mp4"  # Put your mp4 file in the same folder
-OUTPUT_VIDEO = "two_cars_south2.avi" # The processed video
 CONFIDENCE_THRESHOLD = 0.5          # Sensitivity (0.0 to 1.0)
 
 # COCO Dataset Class IDs relevant to vehicles:
@@ -13,10 +12,33 @@ CONFIDENCE_THRESHOLD = 0.5          # Sensitivity (0.0 to 1.0)
 VEHICLE_CLASSES = [2, 3, 5, 7]
 
 def main():
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Vehicle detection in video using YOLOv8')
+    parser.add_argument('input_video', help='Path to input video file')
+    parser.add_argument('-o', '--output', help='Path to output video file (default: input_output.avi)',
+                        default=None)
+    parser.add_argument('-c', '--confidence', type=float, default=CONFIDENCE_THRESHOLD,
+                        help=f'Confidence threshold (default: {CONFIDENCE_THRESHOLD})')
+    args = parser.parse_args()
+
+    INPUT_VIDEO = args.input_video
+    if args.output is None:
+        # Generate default output filename based on input
+        import os
+        base_name = os.path.splitext(args.input_video)[0]
+        OUTPUT_VIDEO = f"{base_name}_output.avi"
+    else:
+        OUTPUT_VIDEO = args.output
+
+    confidence_threshold = args.confidence
+
     # 1. Select the Hardware
     # Force usage of the GPU (device=0). If this fails, it falls back to CPU.
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(f"Running inference on: {device}")
+    print(f"Input video: {INPUT_VIDEO}")
+    print(f"Output video: {OUTPUT_VIDEO}")
+    print(f"Confidence threshold: {confidence_threshold}")
 
     # 2. Load the Model
     # 'yolov8n.pt' will automatically download on first run.
@@ -68,7 +90,7 @@ def main():
             # 5. Run Inference
             # stream=True handles memory better for videos
             # classes=... filters the detection to ONLY vehicles, speeding up post-processing
-            results = model.track(cropped_frame, persist=True, rect=True, conf=CONFIDENCE_THRESHOLD, 
+            results = model.track(cropped_frame, persist=True, rect=True, conf=confidence_threshold,
                                   classes=VEHICLE_CLASSES, device=device, verbose=False)
 
             # 6. Visualize
