@@ -1,4 +1,5 @@
 import cv2
+import time
 from ultralytics import YOLO
 import torch
 
@@ -44,6 +45,11 @@ def main():
 
     print("Starting processing... (Press Ctrl+C to stop early)")
     frame_count = 0
+    
+    # FPS Calculation Init
+    fps_start_time = time.time()
+    fps_counter = 0
+    current_fps = 0.0
 
     try:
         while cap.isOpened():
@@ -85,6 +91,19 @@ def main():
                     print(f"Frame {frame_count}: TRUCK DETECTED! (IDs: {track_ids[class_ids == 7]})")
 
             # 8. Save Frame
+            
+            # FPS Calculation
+            fps_counter += 1
+            if fps_counter >= 10:
+                fps_end_time = time.time()
+                current_fps = fps_counter / (fps_end_time - fps_start_time)
+                print(f"FPS: {current_fps:.2f}")
+                fps_counter = 0
+                fps_start_time = fps_end_time
+
+            cv2.putText(annotated_frame, f"FPS: {current_fps:.2f}", (20, 50), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+
             out.write(annotated_frame)
             frame_count += 1
             
