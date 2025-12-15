@@ -52,6 +52,12 @@ def main():
         print(f"Error: Could not open video file {INPUT_VIDEO}")
         return
 
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if total_frames > 0:
+        print(f"Total frames in input: {total_frames}")
+    else:
+        print("Total frames in input: Unknown (source did not report frame count)")
+
     # 4. Prepare Video Writer to save the output
     width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -72,6 +78,7 @@ def main():
     fps_start_time = time.time()
     fps_counter = 0
     current_fps = 0.0
+    overall_start_time = time.time()
 
     try:
         while cap.isOpened():
@@ -90,8 +97,9 @@ def main():
             # 5. Run Inference
             # stream=True handles memory better for videos
             # classes=... filters the detection to ONLY vehicles, speeding up post-processing
+            # half=True uses FP16 for ~2x speedup on GPU
             results = model.track(cropped_frame, persist=True, rect=True, conf=confidence_threshold,
-                                  classes=VEHICLE_CLASSES, device=device, verbose=False)
+                                  classes=VEHICLE_CLASSES, device=device, verbose=False, half=True)
 
             # 6. Visualize
             # plot() draws the bounding boxes directly onto the frame
@@ -119,7 +127,11 @@ def main():
             if fps_counter >= 10:
                 fps_end_time = time.time()
                 current_fps = fps_counter / (fps_end_time - fps_start_time)
-                print(f"FPS: {current_fps:.2f}")
+                if total_frames > 0:
+                    percent_complete = min(100.0, (frame_count / total_frames) * 100)
+                    print(f"FPS: {current_fps:.2f} | {percent_complete:.1f}% complete")
+                else:
+                    print(f"FPS: {current_fps:.2f} | % complete: N/A")
                 fps_counter = 0
                 fps_start_time = fps_end_time
 
@@ -139,6 +151,13 @@ def main():
     finally:
         cap.release()
         out.release()
+        overall_end_time = time.time()
+        total_time = overall_end_time - overall_start_time
+        if total_time > 0:
+            overall_fps = frame_count / total_time
+            print(f"Overall FPS: {overall_fps:.2f} (processed {frame_count} frames)")
+        else:
+            print(f"Overall FPS: N/A (processed {frame_count} frames)")
         print(f"Done! Output saved to {OUTPUT_VIDEO}")
 
 if __name__ == "__main__":
