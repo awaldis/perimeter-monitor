@@ -135,9 +135,6 @@ def main():
                 fps_counter = 0
                 fps_start_time = fps_end_time
 
-            cv2.putText(annotated_frame, f"FPS: {current_fps:.2f}", (20, 50), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
-
             out.write(annotated_frame)
             frame_count += 1
             
