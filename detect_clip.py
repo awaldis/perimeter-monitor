@@ -59,13 +59,15 @@ def main():
         print("Total frames in input: Unknown (source did not report frame count)")
 
     # 4. Prepare Video Writer to save the output
-    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps    = int(cap.get(cv2.CAP_PROP_FPS))
-    
-    # Overwrite for cropped video
-    width = 2560
-    height = 480
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+    # Define Region of Interest (ROI) once
+    crop_y1, crop_y2 = 202, 682  # Vertical range
+    crop_x1, crop_x2 = 1832, 3752 # Horizontal range
+
+    # Derive output dimensions from the crop
+    width = crop_x2 - crop_x1
+    height = crop_y2 - crop_y1
 
     # XVID is a safe, widely supported codec for AVI files
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -87,19 +89,20 @@ def main():
                 break # End of video
 
             # --- THE FIX: CROP BEFORE INFERENCE ---
-            # Define your Region of Interest (ROI)
-            # Format: frame[y1:y2, x1:x2]
-            crop_y1, crop_y2 = 202, 682  # Vertical range
-            crop_x1, crop_x2 = 1192, 3752 # Horizontal range
-
             cropped_frame = frame[crop_y1:crop_y2, crop_x1:crop_x2]
 
             # 5. Run Inference
             # stream=True handles memory better for videos
             # classes=... filters the detection to ONLY vehicles, speeding up post-processing
             # half=True uses FP16 for ~2x speedup on GPU
-            results = model.track(cropped_frame, persist=True, rect=True, conf=confidence_threshold,
-                                  classes=VEHICLE_CLASSES, device=device, verbose=False, half=True)
+            results = model.track( cropped_frame,
+                                   persist=True,
+                                   rect=True,
+                                   conf=confidence_threshold,
+                                   classes=VEHICLE_CLASSES,
+                                   device=device,
+                                   verbose=False,
+                                   half=True)
 
             # 6. Visualize
             # plot() draws the bounding boxes directly onto the frame
