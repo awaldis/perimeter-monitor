@@ -81,12 +81,19 @@ def main():
     fps_counter = 0
     current_fps = 0.0
     overall_start_time = time.time()
+    loop_times = []
+    read_times = []
+    track_times = []
 
     try:
         while cap.isOpened():
+            loop_start = time.time()
+            read_start = time.time()
             success, frame = cap.read()
+            read_end = time.time()
             if not success:
                 break # End of video
+            read_times.append(read_end - read_start)
 
             # --- THE FIX: CROP BEFORE INFERENCE ---
             cropped_frame = frame[crop_y1:crop_y2, crop_x1:crop_x2]
@@ -95,6 +102,7 @@ def main():
             # stream=True handles memory better for videos
             # classes=... filters the detection to ONLY vehicles, speeding up post-processing
             # half=True uses FP16 for ~2x speedup on GPU
+            track_start = time.time()
             results = model.track( cropped_frame,
                                    persist=True,
                                    rect=True,
@@ -103,6 +111,8 @@ def main():
                                    device=device,
                                    verbose=False,
                                    half=True)
+            track_end = time.time()
+            track_times.append(track_end - track_start)
 
             # 6. Visualize
             # plot() draws the bounding boxes directly onto the frame
@@ -140,6 +150,7 @@ def main():
 
             out.write(annotated_frame)
             frame_count += 1
+            loop_times.append(time.time() - loop_start)
             
             # Simple progress indicator
             if frame_count % 30 == 0:
@@ -158,6 +169,19 @@ def main():
             print(f"Overall FPS: {overall_fps:.2f} (processed {frame_count} frames)")
         else:
             print(f"Overall FPS: N/A (processed {frame_count} frames)")
+
+        def print_stats(label, times):
+            if not times:
+                print(f"{label}: no samples recorded")
+                return
+            min_ms = min(times) * 1000
+            max_ms = max(times) * 1000
+            avg_ms = (sum(times) / len(times)) * 1000
+            print(f"{label}: min {min_ms:.2f} ms | max {max_ms:.2f} ms | avg {avg_ms:.2f} ms over {len(times)} frames")
+
+        print_stats("Loop time", loop_times)
+        print_stats("cap.read()", read_times)
+        print_stats("model.track()", track_times)
         print(f"Done! Output saved to {OUTPUT_VIDEO}")
 
 if __name__ == "__main__":
