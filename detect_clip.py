@@ -170,18 +170,25 @@ def main():
         else:
             print(f"Overall FPS: N/A (processed {frame_count} frames)")
 
-        def print_stats(label, times):
-            if not times:
-                print(f"{label}: no samples recorded")
-                return
-            min_ms = min(times) * 1000
-            max_ms = max(times) * 1000
-            avg_ms = (sum(times) / len(times)) * 1000
-            print(f"{label}: min {min_ms:.2f} ms | max {max_ms:.2f} ms | avg {avg_ms:.2f} ms over {len(times)} frames")
+        # Print timing statistics as a table
+        print("\nPerformance Timing Statistics:")
+        print(f"{'Metric':<20} {'Min (ms)':>10} {'Max (ms)':>10} {'Avg (ms)':>10} {'Frames':>10}")
+        print("-" * 62)
 
-        print_stats("Loop time", loop_times)
-        print_stats("cap.read()", read_times)
-        print_stats("model.track()", track_times)
+        stats = [
+            ("Loop time", loop_times),
+            ("cap.read()", read_times),
+            ("model.track()", track_times)
+        ]
+
+        for label, times in stats:
+            if times:
+                min_ms = min(times) * 1000
+                max_ms = max(times) * 1000
+                avg_ms = (sum(times) / len(times)) * 1000
+                print(f"{label:<20} {min_ms:>10.2f} {max_ms:>10.2f} {avg_ms:>10.2f} {len(times):>10}")
+            else:
+                print(f"{label:<20} {'N/A':>10} {'N/A':>10} {'N/A':>10} {0:>10}")
         print(f"Done! Output saved to {OUTPUT_VIDEO}")
 
 if __name__ == "__main__":
