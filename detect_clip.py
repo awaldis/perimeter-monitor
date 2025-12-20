@@ -32,22 +32,28 @@ def main():
 
   confidence_threshold = args.confidence
 
-  # 1. Select the Hardware
+  #--------------------------------------------------------------------------
+  # Select the Hardware
+  #--------------------------------------------------------------------------
+
   # Force usage of the GPU (device=0). If this fails, it falls back to CPU.
   device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
   print(f"Running inference on: {device}")
   print(f"Input video: {INPUT_VIDEO}")
   print(f"Output video: {OUTPUT_VIDEO}")
   print(f"Confidence threshold: {confidence_threshold}")
 
-  # 2. Load the Model
-  # 'yolov8n.pt' will automatically download on first run.
-  # We use 'n' (nano) because the MX150 has limited VRAM.
+  #--------------------------------------------------------------------------
+  # Load the Model
+  #--------------------------------------------------------------------------
   print("Loading YOLOv8 Nano model...")
   #model = YOLO("yolov8n.pt")
   model = YOLO("yolov8n.onnx")
 
-  # 3. Open Video Source
+  #--------------------------------------------------------------------------
+  # Open Video Source
+  #--------------------------------------------------------------------------
   cap = cv2.VideoCapture(INPUT_VIDEO)
   if not cap.isOpened():
     print(f"Error: Could not open video file {INPUT_VIDEO}")
@@ -59,12 +65,16 @@ def main():
   else:
     print("Total frames in input: Unknown (source did not report frame count)")
 
-  # 4. Prepare Video Writer to save the output
-  fps = int(cap.get(cv2.CAP_PROP_FPS))
-
-  # Define Region of Interest (ROI) once
-  crop_y1, crop_y2 = 202, 682  # Vertical range
+  #--------------------------------------------------------------------------
+  # Define the sub-region of the video frame that we want to analyze.
+  #--------------------------------------------------------------------------
+  crop_y1, crop_y2 =  202,  682 # Vertical range
   crop_x1, crop_x2 = 1832, 3752 # Horizontal range
+
+  #--------------------------------------------------------------------------
+  # Prepare Video Writer to save the output
+  #--------------------------------------------------------------------------
+  fps = int(cap.get(cv2.CAP_PROP_FPS))
 
   # Derive output dimensions from the crop
   width  = crop_x2 - crop_x1
