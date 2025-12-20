@@ -115,7 +115,6 @@ def main():
                              persist=True,
                              rect=True,
                              imgsz=[480, 1600],
-                             stream=True,
                              conf=confidence_threshold,
                              classes=VEHICLE_CLASSES,
                              device=device,
