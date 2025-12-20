@@ -49,7 +49,7 @@ def main():
   #--------------------------------------------------------------------------
   print("Loading YOLOv8 Nano model...")
   #model = YOLO("yolov8n.pt")
-  model = YOLO("yolov8n.onnx")
+  model = YOLO("yolov8n.onnx", task='detect')
 
   #--------------------------------------------------------------------------
   # Open Video Source
@@ -69,7 +69,7 @@ def main():
   # Define the sub-region of the video frame that we want to analyze.
   #--------------------------------------------------------------------------
   crop_y1, crop_y2 =  202,  682 # Vertical range
-  crop_x1, crop_x2 = 1832, 3752 # Horizontal range
+  crop_x1, crop_x2 = 2152, 3752 # Horizontal range
 
   #--------------------------------------------------------------------------
   # Prepare Video Writer to save the output
@@ -114,11 +114,13 @@ def main():
       results = model.track( cropped_frame,
                              persist=True,
                              rect=True,
+                             imgsz=[480, 1600],
+                             stream=True,
                              conf=confidence_threshold,
                              classes=VEHICLE_CLASSES,
                              device=device,
                              verbose=False,
-                             half=True)
+                             half=False)
       track_end = time.time()
       track_times.append(track_end - track_start)
 
