@@ -160,6 +160,11 @@ def main():
   read_times = []
   track_times = []
 
+  # For RTSP mode: status updates every 5 seconds
+  if is_rtsp:
+    last_status_time = time.time()
+    status_interval = 5.0  # seconds
+
   try:
     while cap.isOpened():
       loop_start = time.time()
@@ -235,18 +240,43 @@ def main():
             is_recording = False
             out = None
 
-      # FPS Calculation
-      fps_counter += 1
-      if fps_counter >= 10:
-        fps_end_time = time.time()
-        current_fps = fps_counter / (fps_end_time - fps_start_time)
-        if total_frames > 0:
-          percent_complete = min(100.0, (frame_count / total_frames) * 100)
-          print(f"FPS: {current_fps:.2f} | {percent_complete:.1f}% complete")
+      # Status updates - different for RTSP vs file mode
+      if is_rtsp:
+        # RTSP mode: Print status every 5 seconds
+        current_time = time.time()
+        if current_time - last_status_time >= status_interval:
+          # Calculate FPS over the interval
+          interval_fps = fps_counter / (current_time - fps_start_time) if (current_time - fps_start_time) > 0 else 0
+          running_time = current_time - overall_start_time
+
+          # Format timestamp and running time
+          from datetime import datetime
+          timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+          hours = int(running_time // 3600)
+          minutes = int((running_time % 3600) // 60)
+          seconds = int(running_time % 60)
+
+          print(f"[{timestamp}] Runtime: {hours:02d}:{minutes:02d}:{seconds:02d} | Frames: {frame_count} | FPS: {interval_fps:.2f}")
+
+          # Reset counters for next interval
+          fps_counter = 0
+          fps_start_time = current_time
+          last_status_time = current_time
         else:
-          print(f"FPS: {current_fps:.2f} | % complete: N/A")
-        fps_counter = 0
-        fps_start_time = fps_end_time
+          fps_counter += 1
+      else:
+        # File mode: Existing FPS calculation with percent complete
+        fps_counter += 1
+        if fps_counter >= 10:
+          fps_end_time = time.time()
+          current_fps = fps_counter / (fps_end_time - fps_start_time)
+          if total_frames > 0:
+            percent_complete = min(100.0, (frame_count / total_frames) * 100)
+            print(f"FPS: {current_fps:.2f} | {percent_complete:.1f}% complete")
+          else:
+            print(f"FPS: {current_fps:.2f} | % complete: N/A")
+          fps_counter = 0
+          fps_start_time = fps_end_time
 
       # Save cropped frame with bounding boxes (only if recording)
       if is_rtsp:
@@ -272,8 +302,8 @@ def main():
       frame_count += 1
       loop_times.append(time.time() - loop_start)
 
-      # Write progress indicator to console.
-      if frame_count % 30 == 0:
+      # Write progress indicator to console (file mode only)
+      if not is_rtsp and frame_count % 30 == 0:
         print(f"Processed {frame_count} frames...")
 
   except KeyboardInterrupt:
