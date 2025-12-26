@@ -3,6 +3,8 @@ import time
 from ultralytics import YOLO
 import torch
 import argparse
+import threading
+from queue import Queue
 
 # --- CONFIGURATION ---
 CONFIDENCE_THRESHOLD = 0.5          # Sensitivity (0.0 to 1.0)
@@ -10,6 +12,83 @@ CONFIDENCE_THRESHOLD = 0.5          # Sensitivity (0.0 to 1.0)
 # COCO Dataset Class IDs relevant to vehicles:
 # 2: car, 3: motorcycle, 5: bus, 7: truck
 VEHICLE_CLASSES = [2, 3, 5, 7]
+
+class VideoStreamReader:
+  """
+  Threaded video stream reader that decouples frame capture from processing.
+  Continuously reads frames in a background thread and stores them in a queue.
+  """
+  def __init__(self, src, queue_size=3, is_rtsp=False, rtsp_transport='tcp'):
+    """
+    Args:
+      src: Video source (file path or RTSP URL)
+      queue_size: Maximum number of frames to buffer
+      is_rtsp: Whether source is an RTSP stream
+      rtsp_transport: 'tcp' or 'udp' for RTSP streams
+    """
+    import os
+
+    # Configure video capture based on source type
+    if is_rtsp:
+      if rtsp_transport == 'tcp':
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+        self.stream = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
+        self.stream.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+      else:
+        self.stream = cv2.VideoCapture(src)
+        self.stream.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    else:
+      self.stream = cv2.VideoCapture(src)
+
+    self.queue = Queue(maxsize=queue_size)
+    self.stopped = False
+    self.read_error = False
+
+  def start(self):
+    """Start the background thread for reading frames."""
+    thread = threading.Thread(target=self._reader, daemon=True)
+    thread.start()
+    return self
+
+  def _reader(self):
+    """Background thread that continuously reads frames."""
+    while not self.stopped:
+      if not self.queue.full():
+        ret, frame = self.stream.read()
+        if not ret:
+          self.read_error = True
+          self.stopped = True
+          return
+        self.queue.put((ret, frame))
+      else:
+        # Queue is full, wait a bit before trying again
+        time.sleep(0.001)
+
+  def read(self):
+    """
+    Get the next frame from the queue.
+    Returns: (ret, frame) tuple like cv2.VideoCapture.read()
+    """
+    if self.queue.empty() and self.read_error:
+      return False, None
+    return self.queue.get()
+
+  def qsize(self):
+    """Return the number of frames currently in the queue."""
+    return self.queue.qsize()
+
+  def isOpened(self):
+    """Check if the video source is opened."""
+    return self.stream.isOpened()
+
+  def get(self, prop):
+    """Get a property from the video stream."""
+    return self.stream.get(prop)
+
+  def stop(self):
+    """Stop the background thread and release the video stream."""
+    self.stopped = True
+    self.stream.release()
 
 def main():
   # Parse command-line arguments
@@ -74,33 +153,32 @@ def main():
   model = YOLO("yolov8n.onnx", task='detect')
 
   #--------------------------------------------------------------------------
-  # Open Video Source
+  # Open Video Source with Threaded Reader
   #--------------------------------------------------------------------------
-  if is_rtsp:
-    # Configure RTSP connection
-    if rtsp_transport == 'tcp':
-      os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
-      cap = cv2.VideoCapture(VIDEO_SOURCE, cv2.CAP_FFMPEG)
-      cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
-    else:
-      cap = cv2.VideoCapture(VIDEO_SOURCE)
-      cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-  else:
-    cap = cv2.VideoCapture(VIDEO_SOURCE)
+  print("Initializing threaded video reader...")
+  reader = VideoStreamReader(
+    VIDEO_SOURCE,
+    queue_size=3,
+    is_rtsp=is_rtsp,
+    rtsp_transport=rtsp_transport
+  ).start()
 
-  if not cap.isOpened():
+  if not reader.isOpened():
     print(f"Error: Could not open video source {VIDEO_SOURCE}")
     return
 
-  total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+  # Give the reader thread a moment to start filling the queue
+  time.sleep(0.5)
+
+  total_frames = int(reader.get(cv2.CAP_PROP_FRAME_COUNT))
   if total_frames > 0:
     print(f"Total frames in input: {total_frames}")
   else:
     print("Total frames in input: Unknown (source did not report frame count)")
 
   # Get and validate frame dimensions
-  frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-  frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+  frame_width = int(reader.get(cv2.CAP_PROP_FRAME_WIDTH))
+  frame_height = int(reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
   print(f"Stream resolution: {frame_width}x{frame_height}")
 
   #--------------------------------------------------------------------------
@@ -118,13 +196,13 @@ def main():
     print(f"Crop region: x({crop_x1}:{crop_x2}), y({crop_y1}:{crop_y2})")
     print("\nPlease configure your camera to output a higher resolution stream.")
     print("You need at least 4K (3840x2160) resolution for the current crop settings.")
-    cap.release()
+    reader.stop()
     return
 
   #--------------------------------------------------------------------------
   # Prepare Video Writer to save the output
   #--------------------------------------------------------------------------
-  fps = int(cap.get(cv2.CAP_PROP_FPS))
+  fps = int(reader.get(cv2.CAP_PROP_FPS))
   if fps <= 0:
     fps = 25  # Default to 25 FPS if stream doesn't report FPS
 
@@ -166,10 +244,10 @@ def main():
     status_interval = 5.0  # seconds
 
   try:
-    while cap.isOpened():
+    while reader.isOpened():
       loop_start = time.time()
       read_start = time.time()
-      success, frame = cap.read()
+      success, frame = reader.read()
       read_end = time.time()
       if not success:
         break # End of video
@@ -239,6 +317,13 @@ def main():
             print(f"Stopped recording clip (1 second after last vehicle)")
             is_recording = False
             out = None
+
+        # Check queue size to detect if processing is falling behind
+        queue_size = reader.qsize()
+        if queue_size >= 2:
+          from datetime import datetime
+          timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+          print(f"[{timestamp}] WARNING: Processing too slow! {queue_size} frames buffered (falling behind)")
 
       # Status updates - different for RTSP vs file mode
       if is_rtsp:
@@ -310,7 +395,7 @@ def main():
     print("\nStopping early...")
 
   finally:
-    cap.release()
+    reader.stop()
     if out is not None:
       out.release()
       if is_rtsp and is_recording:
