@@ -63,7 +63,7 @@ def parse_args():
 
 
 def setup_video_reader(video_source, is_rtsp, rtsp_transport):
-  """Initialize video reader and measure FPS."""
+  """Initialize video reader and measure FPS (for RTSP only)."""
   print("Initializing video reader...")
   reader = VideoStreamReader(
     video_source,
@@ -75,11 +75,15 @@ def setup_video_reader(video_source, is_rtsp, rtsp_transport):
     print(f"Error: Could not open video source {video_source}")
     return None, None
 
-  # Measure FPS before starting threaded reader
-  print("Measuring actual source frame rate...")
-  measured_fps = reader.measure_fps()
-  if measured_fps:
-    print(f"  Measured FPS: {measured_fps:.2f}")
+  # For RTSP: measure actual FPS (stream metadata is often wrong)
+  # For files: use embedded FPS from file metadata
+  if is_rtsp:
+    print("Measuring actual source frame rate...")
+    measured_fps = reader.measure_fps()
+    if measured_fps:
+      print(f"  Measured FPS: {measured_fps:.2f}")
+  else:
+    measured_fps = None  # Will use file's embedded FPS
 
   # Start threaded reader
   print("Starting threaded reader...")
