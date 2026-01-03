@@ -110,20 +110,20 @@ def validate_frame_size(reader, crop_x1, crop_x2, crop_y1, crop_y2):
 
 def determine_fps(reader, measured_fps, is_rtsp):
   """Determine output FPS from measured or reported values."""
-  reported_fps = int(reader.get(cv2.CAP_PROP_FPS))
+  reported_fps = reader.get(cv2.CAP_PROP_FPS)
 
   if is_rtsp:
     # RTSP mode: prefer measured FPS over reported
     if measured_fps is not None:
-      fps = int(round(measured_fps))
-      print(f"Stream reports FPS: {reported_fps}, Using measured: {fps}")
+      fps = measured_fps
+      print(f"Stream reports FPS: {reported_fps:.2f}, Using measured: {fps:.2f}")
     else:
       fps = reported_fps if reported_fps > 0 else DEFAULT_FPS
-      print(f"Stream reports FPS: {reported_fps}, Measurement failed, Using: {fps}")
+      print(f"Stream reports FPS: {reported_fps:.2f}, Measurement failed, Using: {fps:.2f}")
   else:
     # File mode: use file's embedded FPS
     fps = reported_fps if reported_fps > 0 else DEFAULT_FPS
-    print(f"Input file FPS: {fps}")
+    print(f"Input file FPS: {fps:.2f}")
 
   return fps
 
