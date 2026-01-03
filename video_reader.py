@@ -7,7 +7,7 @@ import cv2
 import time
 import os
 import threading
-from queue import Queue
+from queue import Queue, Empty
 
 from config import READER_QUEUE_SIZE, FPS_DRAIN_FRAMES, FPS_MEASURE_FRAMES
 
@@ -51,8 +51,8 @@ class VideoStreamReader:
 
   def start(self):
     """Start the background thread for reading frames."""
-    thread = threading.Thread(target=self._reader, daemon=True)
-    thread.start()
+    self._thread = threading.Thread(target=self._reader, daemon=True)
+    self._thread.start()
     return self
 
   def _reader(self):
@@ -96,7 +96,15 @@ class VideoStreamReader:
     """
     if self.queue.empty() and self.read_error:
       return False, None
-    return self.queue.get()
+    try:
+      # Use timeout to allow checking for stop condition
+      return self.queue.get(timeout=0.5)
+    except Empty:
+      # Timeout - check if we should exit
+      if self.stopped or self.read_error:
+        return False, None
+      # Otherwise keep waiting
+      return self.read()
 
   def qsize(self):
     """Return the number of frames currently in the queue."""
@@ -162,4 +170,8 @@ class VideoStreamReader:
   def stop(self):
     """Stop the background thread and release the video stream."""
     self.stopped = True
+    # Wait for reader thread to finish before releasing stream
+    # This prevents segfault from releasing stream while thread is reading
+    if hasattr(self, '_thread') and self._thread.is_alive():
+      self._thread.join(timeout=2.0)
     self.stream.release()
