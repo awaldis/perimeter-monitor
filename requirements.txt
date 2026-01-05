@@ -1,0 +1,24 @@
+# Core dependencies for perimeter-monitor
+# This version works on CPU and Intel GPU (no NVIDIA CUDA required)
+
+# Computer vision and video processing
+opencv-python==4.12.0.88
+numpy>=2.2.0,<3.0.0
+
+# YOLOv8 object detection
+ultralytics==8.3.235
+
+# ONNX Runtime - CPU version (for Intel GPU, see README for OpenVINO option)
+onnxruntime==1.23.2
+
+# Required by ultralytics
+pillow>=11.0.0
+psutil>=7.0.0
+pyyaml>=6.0.0
+requests>=2.32.0
+scipy>=1.16.0
+torch>=2.5.0
+torchvision>=0.20.0
+
+# Utilities
+coloredlogs>=15.0.0
