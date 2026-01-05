@@ -5,3 +5,5 @@ __pycache__/
 local/
 *.pt
 *.onnx
+package-lock.json
+clips/
