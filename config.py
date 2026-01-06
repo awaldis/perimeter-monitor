@@ -11,7 +11,7 @@ CROP_Y1, CROP_Y2 = 202, 682    # Vertical range
 CROP_X1, CROP_X2 = 2152, 3752  # Horizontal range
 
 # Model settings
-MODEL_PATH = "yolov8n.onnx"
+MODEL_PATH = "yolov8n_openvino_model"
 MODEL_IMGSZ = [480, 1600]
 
 # Recording settings
