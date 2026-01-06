@@ -27,6 +27,12 @@ from video_reader import VideoStreamReader
 from vehicle_detector import VehicleDetector
 from clip_recorder import ClipRecorder
 
+# Import local configuration for clips directory (with fallback)
+try:
+  from config_local import CLIPS_DIR
+except ImportError:
+  CLIPS_DIR = "clips"  # Default fallback if config_local.py doesn't exist
+
 
 def parse_args():
   """Parse command line arguments."""
@@ -39,7 +45,7 @@ def parse_args():
   )
   parser.add_argument(
     '-o', '--output',
-    help='Path to output video file (default: input_output.avi for files, clips/ for RTSP)',
+    help='Path to output video file (default: CLIPS_DIR/input_output.avi for files, CLIPS_DIR for RTSP)',
     default=None
   )
   parser.add_argument(
@@ -183,10 +189,12 @@ def main():
   if args.output is None:
     if is_rtsp:
       output_video = None
-      output_dir = "clips"
+      output_dir = CLIPS_DIR
     else:
-      base_name = os.path.splitext(video_source)[0]
-      output_video = f"{base_name}_output.avi"
+      # For video files, write output to network drive
+      input_filename = os.path.basename(video_source)
+      base_name = os.path.splitext(input_filename)[0]
+      output_video = os.path.join(CLIPS_DIR, f"{base_name}_output.avi")
       output_dir = None
   else:
     output_video = args.output
@@ -237,6 +245,10 @@ def main():
     out = None
   else:
     recorder = None
+    # Ensure output directory exists for file mode
+    output_file_dir = os.path.dirname(output_video)
+    if output_file_dir:
+      os.makedirs(output_file_dir, exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
 

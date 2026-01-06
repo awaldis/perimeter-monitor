@@ -7,3 +7,4 @@ local/
 *.onnx
 package-lock.json
 clips/
+config_local.py
