@@ -41,7 +41,7 @@ class ClipRecorder:
     self.current_clip_filename = None
 
     # Video codec
-    self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    self.fourcc = cv2.VideoWriter_fourcc(*'MJPG')
 
     # Create output directory if needed
     if output_dir:
