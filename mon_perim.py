@@ -249,7 +249,7 @@ def main():
     output_file_dir = os.path.dirname(output_video)
     if output_file_dir:
       os.makedirs(output_file_dir, exist_ok=True)
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
 
   # Processing state
