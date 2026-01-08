@@ -5,9 +5,17 @@ Handles start/stop recording with configurable buffer time.
 
 import cv2
 import os
-import time
+from datetime import datetime
 
 from config import CLIP_BUFFER_SECONDS
+
+# COCO class ID to name mapping
+COCO_CLASS_NAMES = {
+  2: 'car',
+  3: 'motorcycle',
+  5: 'bus',
+  7: 'truck'
+}
 
 
 class ClipRecorder:
@@ -67,7 +75,17 @@ class ClipRecorder:
     if not self.is_recording:
       # Start new clip
       self.clip_count += 1
-      clip_basename = f"clip_{int(time.time())}_{self.clip_count}"
+
+      # Determine vehicle type from first detection
+      if detections and len(detections) > 0:
+        first_class_id = detections[0][0]
+        vehicle_type = COCO_CLASS_NAMES.get(first_class_id, 'vehicle')
+      else:
+        vehicle_type = 'vehicle'
+
+      # Format timestamp as local time (ISO 8601 style)
+      timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+      clip_basename = f"{vehicle_type}_{timestamp}"
       self.current_clip_filename = os.path.join(
         self.output_dir,
         f"{clip_basename}.avi"
