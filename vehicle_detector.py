@@ -110,6 +110,35 @@ class VehicleDetector:
     vehicle_detected = len(cars) > 0 or len(trucks) > 0
     return vehicle_detected, cars, trucks
 
+  def get_detection_boxes(self, results):
+    """
+    Extract bounding boxes for annotation export.
+
+    Args:
+      results: YOLO results from detect()
+
+    Returns:
+      List of (class_id, x_center, y_center, width, height) tuples,
+      all normalized to 0-1. Uses COCO class IDs directly.
+    """
+    boxes = results[0].boxes
+    detections = []
+
+    if boxes.cls is not None and len(boxes.cls) > 0:
+      class_ids = boxes.cls.cpu().numpy().astype(int)
+      xywhn = boxes.xywhn.cpu().numpy()  # Normalized [x_center, y_center, w, h]
+
+      for i in range(len(class_ids)):
+        detections.append((
+          class_ids[i],
+          xywhn[i][0],  # x_center
+          xywhn[i][1],  # y_center
+          xywhn[i][2],  # width
+          xywhn[i][3]   # height
+        ))
+
+    return detections
+
   def get_device(self):
     """Return the device being used for inference."""
     return self.device

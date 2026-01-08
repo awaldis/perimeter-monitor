@@ -39,6 +39,8 @@ class ClipRecorder:
     self.clip_count = 0
     self.current_writer = None
     self.current_clip_filename = None
+    self.current_frames_dir = None
+    self.frame_number = 0
 
     # Video codec
     self.fourcc = cv2.VideoWriter_fourcc(*'MJPG')
@@ -47,13 +49,15 @@ class ClipRecorder:
     if output_dir:
       os.makedirs(output_dir, exist_ok=True)
 
-  def on_vehicle_detected(self, frame):
+  def on_vehicle_detected(self, frame, clean_frame=None, detections=None):
     """
     Call when a vehicle is detected in the current frame.
     Starts recording if not already, or resets the buffer timer.
 
     Args:
       frame: The annotated frame to record
+      clean_frame: The clean frame without annotations (for training export)
+      detections: List of (class_id, x, y, w, h) tuples for YOLO annotations
 
     Returns:
       True if a new clip was started, False otherwise
@@ -63,10 +67,18 @@ class ClipRecorder:
     if not self.is_recording:
       # Start new clip
       self.clip_count += 1
+      clip_basename = f"clip_{int(time.time())}_{self.clip_count}"
       self.current_clip_filename = os.path.join(
         self.output_dir,
-        f"clip_{int(time.time())}_{self.clip_count}.avi"
+        f"{clip_basename}.avi"
       )
+      self.current_frames_dir = os.path.join(
+        self.output_dir,
+        f"{clip_basename}_frames"
+      )
+      os.makedirs(self.current_frames_dir, exist_ok=True)
+      self.frame_number = 0
+
       self.current_writer = cv2.VideoWriter(
         self.current_clip_filename,
         self.fourcc,
@@ -85,15 +97,21 @@ class ClipRecorder:
     if self.current_writer is not None:
       self.current_writer.write(frame)
 
+    # Save training frame
+    if clean_frame is not None:
+      self._save_training_frame(clean_frame, detections)
+
     return started_new_clip
 
-  def on_no_vehicle(self, frame):
+  def on_no_vehicle(self, frame, clean_frame=None, detections=None):
     """
     Call when no vehicle is detected in the current frame.
     Continues recording during buffer period, then stops.
 
     Args:
       frame: The annotated frame (recorded if still in buffer period)
+      clean_frame: The clean frame without annotations (for training export)
+      detections: List of (class_id, x, y, w, h) tuples for YOLO annotations
 
     Returns:
       True if recording was stopped, False otherwise
@@ -107,6 +125,10 @@ class ClipRecorder:
       if self.current_writer is not None:
         self.current_writer.write(frame)
 
+      # Save training frame
+      if clean_frame is not None:
+        self._save_training_frame(clean_frame, detections)
+
       # Check if buffer expired
       if self.frames_since_last_vehicle >= self.buffer_frames:
         self._stop_recording()
@@ -115,6 +137,32 @@ class ClipRecorder:
 
     return stopped_recording
 
+  def _save_training_frame(self, clean_frame, detections):
+    """
+    Save a clean JPEG frame and YOLO annotation file.
+
+    Args:
+      clean_frame: The frame without annotations
+      detections: List of (class_id, x, y, w, h) tuples (normalized 0-1)
+    """
+    if self.current_frames_dir is None:
+      return
+
+    self.frame_number += 1
+    frame_basename = f"frame_{self.frame_number:04d}"
+
+    # Save JPEG
+    jpg_path = os.path.join(self.current_frames_dir, f"{frame_basename}.jpg")
+    cv2.imwrite(jpg_path, clean_frame)
+
+    # Save YOLO annotation
+    txt_path = os.path.join(self.current_frames_dir, f"{frame_basename}.txt")
+    with open(txt_path, 'w') as f:
+      if detections:
+        for class_id, x, y, w, h in detections:
+          f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
+      # Empty file if no detections
+
   def _stop_recording(self):
     """Internal method to stop recording and close the writer."""
     if self.current_writer is not None:
@@ -122,6 +170,8 @@ class ClipRecorder:
       self.current_writer = None
     self.is_recording = False
     self.frames_since_last_vehicle = 0
+    self.current_frames_dir = None
+    self.frame_number = 0
 
   def close(self):
     """

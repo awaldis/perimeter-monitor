@@ -252,6 +252,12 @@ def main():
     fourcc = cv2.VideoWriter_fourcc(*'MJPG')
     out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
 
+    # Create training frames directory for file mode
+    output_base = os.path.splitext(output_video)[0]
+    training_frames_dir = f"{output_base}_frames"
+    os.makedirs(training_frames_dir, exist_ok=True)
+    print(f"Training frames will be saved to: {training_frames_dir}")
+
   # Processing state
   print("Starting processing...")
   print("Press 'q' to quit (or Ctrl+C)")
@@ -291,6 +297,7 @@ def main():
       # Get annotated frame and detection results
       annotated_frame = detector.get_annotated_frame(results)
       vehicle_detected, cars, trucks = detector.get_detections(results)
+      detections = detector.get_detection_boxes(results)
 
       # Log detections
       if cars:
@@ -301,9 +308,9 @@ def main():
       # Handle recording
       if is_rtsp:
         if vehicle_detected:
-          recorder.on_vehicle_detected(annotated_frame)
+          recorder.on_vehicle_detected(annotated_frame, cropped_frame, detections)
         else:
-          recorder.on_no_vehicle(annotated_frame)
+          recorder.on_no_vehicle(annotated_frame, cropped_frame, detections)
 
         # Queue monitoring
         queue_size = reader.qsize()
@@ -314,6 +321,16 @@ def main():
           last_queue_warning_time = current_time
       else:
         out.write(annotated_frame)
+
+        # Save training frame (JPEG + YOLO annotation)
+        frame_basename = f"frame_{frame_count:06d}"
+        jpg_path = os.path.join(training_frames_dir, f"{frame_basename}.jpg")
+        txt_path = os.path.join(training_frames_dir, f"{frame_basename}.txt")
+
+        cv2.imwrite(jpg_path, cropped_frame)
+        with open(txt_path, 'w') as f:
+          for class_id, x, y, w, h in detections:
+            f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
 
       # Status updates
       if is_rtsp:
