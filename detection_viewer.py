@@ -30,12 +30,23 @@ except ImportError:
 
 app = Flask(__name__)
 
-# Queue for SSE events
-event_queue = queue.Queue()
+# Set of client queues for SSE broadcast
+client_queues = set()
+clients_lock = threading.Lock()
 
 # Track known detections
 known_detections = []
 detections_lock = threading.Lock()
+
+
+def broadcast_event(info):
+  """Send an event to all connected clients."""
+  with clients_lock:
+    for q in client_queues:
+      try:
+        q.put_nowait(info)
+      except queue.Full:
+        pass  # Skip clients with full queues
 
 
 def parse_detection_name(dirname):
@@ -155,8 +166,8 @@ class DetectionHandler(FileSystemEventHandler):
           with detections_lock:
             known_detections.insert(0, info)
 
-          # Send SSE event
-          event_queue.put(info)
+          # Broadcast to all connected clients
+          broadcast_event(info)
         return
       time.sleep(0.1)
 
@@ -179,22 +190,34 @@ def index():
 @app.route('/events')
 def events():
   """SSE endpoint for real-time detection updates."""
-  def generate():
-    # Send initial keepalive
-    yield 'data: {"type": "connected"}\n\n'
+  # Create a queue for this client
+  client_queue = queue.Queue(maxsize=100)
 
-    while True:
-      try:
-        # Wait for new events with timeout for keepalive
-        info = event_queue.get(timeout=30)
-        data = json.dumps({
-          'type': 'new_detection',
-          'detection': info
-        })
-        yield f'data: {data}\n\n'
-      except queue.Empty:
-        # Send keepalive
-        yield 'data: {"type": "keepalive"}\n\n'
+  # Register client
+  with clients_lock:
+    client_queues.add(client_queue)
+
+  def generate():
+    try:
+      # Send initial keepalive
+      yield 'data: {"type": "connected"}\n\n'
+
+      while True:
+        try:
+          # Wait for new events with timeout for keepalive
+          info = client_queue.get(timeout=30)
+          data = json.dumps({
+            'type': 'new_detection',
+            'detection': info
+          })
+          yield f'data: {data}\n\n'
+        except queue.Empty:
+          # Send keepalive
+          yield 'data: {"type": "keepalive"}\n\n'
+    finally:
+      # Unregister client on disconnect
+      with clients_lock:
+        client_queues.discard(client_queue)
 
   return Response(
     generate(),
