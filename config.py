@@ -11,7 +11,7 @@ CROP_Y1, CROP_Y2 = 202, 682    # Vertical range
 CROP_X1, CROP_X2 = 2152, 3752  # Horizontal range
 
 # Model settings
-MODEL_PATH = "yolov8n_openvino_model"
+MODEL_PATH = "yolov8n.pt"
 MODEL_IMGSZ = [480, 1600]
 
 # Recording settings
@@ -26,3 +26,9 @@ QUEUE_WARNING_INTERVAL = 5.0   # How often to warn about slow processing
 READER_QUEUE_SIZE = 3          # Number of frames to buffer
 FPS_DRAIN_FRAMES = 30          # Frames to discard when measuring FPS
 FPS_MEASURE_FRAMES = 15        # Frames to measure FPS over
+
+# Override any settings with machine-specific config (not in git)
+try:
+  from config_local import *
+except ImportError:
+  pass
