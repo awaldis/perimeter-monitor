@@ -296,14 +296,13 @@ def main():
 
       # Get annotated frame and detection results
       annotated_frame = detector.get_annotated_frame(results)
-      vehicle_detected, cars, trucks = detector.get_detections(results)
+      vehicle_detected, detections_by_class = detector.get_detections(results)
       detections = detector.get_detection_boxes(results)
 
       # Log detections
-      if cars:
-        print(f"Frame {frame_count}: CAR DETECTED! (IDs: {cars})")
-      if trucks:
-        print(f"Frame {frame_count}: TRUCK DETECTED! (IDs: {trucks})")
+      if detections_by_class:
+        for class_name, track_ids in detections_by_class.items():
+          print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
 
       # Handle recording
       if is_rtsp:
