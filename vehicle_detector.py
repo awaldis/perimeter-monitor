@@ -9,7 +9,8 @@ from config import (
   MODEL_PATH,
   MODEL_IMGSZ,
   CONFIDENCE_THRESHOLD,
-  VEHICLE_CLASSES
+  VEHICLE_CLASSES,
+  CLASS_NAMES
 )
 
 
@@ -84,31 +85,25 @@ class VehicleDetector:
       results: YOLO results from detect()
 
     Returns:
-      Tuple of (vehicle_detected, cars, trucks) where:
+      Tuple of (vehicle_detected, detections) where:
         - vehicle_detected: True if any vehicle was detected
-        - cars: List of track IDs for detected cars
-        - trucks: List of track IDs for detected trucks
+        - detections: Dict mapping class_name -> list of track IDs
     """
     boxes = results[0].boxes
-    cars = []
-    trucks = []
+    detections = {}
 
     if boxes.id is not None:
       class_ids = boxes.cls.cpu().numpy().astype(int)
       track_ids = boxes.id.cpu().numpy().astype(int)
 
-      # Extract car IDs (class 2)
-      car_mask = class_ids == 2
-      if car_mask.any():
-        cars = track_ids[car_mask].tolist()
+      for class_id, track_id in zip(class_ids, track_ids):
+        class_name = CLASS_NAMES.get(class_id, f'class_{class_id}')
+        if class_name not in detections:
+          detections[class_name] = []
+        detections[class_name].append(int(track_id))
 
-      # Extract truck IDs (class 7)
-      truck_mask = class_ids == 7
-      if truck_mask.any():
-        trucks = track_ids[truck_mask].tolist()
-
-    vehicle_detected = len(cars) > 0 or len(trucks) > 0
-    return vehicle_detected, cars, trucks
+    vehicle_detected = len(detections) > 0
+    return vehicle_detected, detections
 
   def get_detection_boxes(self, results):
     """

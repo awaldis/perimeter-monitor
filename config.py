@@ -4,7 +4,17 @@ Configuration constants for the perimeter monitor.
 
 # Detection settings
 CONFIDENCE_THRESHOLD = 0.5
-VEHICLE_CLASSES = [2, 3, 5, 7]  # COCO: 2=car, 3=motorcycle, 5=bus, 7=truck
+
+# Class names mapping (class_id -> name) - COCO defaults
+CLASS_NAMES = {
+  2: 'car',
+  3: 'motorcycle',
+  5: 'bus',
+  7: 'truck',
+}
+
+# Which classes to detect
+VEHICLE_CLASSES = [2, 3, 5, 7]
 
 # Crop region for 4K video (specific to camera setup)
 CROP_Y1, CROP_Y2 = 202, 682    # Vertical range
