@@ -161,7 +161,7 @@ class ClipRecorder:
 
     Args:
       clean_frame: The frame without annotations
-      detections: List of (class_id, x, y, w, h) tuples (normalized 0-1)
+      detections: List of (class_id, x, y, w, h, conf) tuples (normalized 0-1)
     """
     if self.current_frames_dir is None:
       return
@@ -177,8 +177,8 @@ class ClipRecorder:
     txt_path = os.path.join(self.current_frames_dir, f"{frame_basename}.txt")
     with open(txt_path, 'w') as f:
       if detections:
-        for class_id, x, y, w, h in detections:
-          f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
+        for class_id, x, y, w, h, conf in detections:
+          f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f} {conf:.6f}\n")
       # Empty file if no detections
 
   def _stop_recording(self):

@@ -113,7 +113,7 @@ class VehicleDetector:
       results: YOLO results from detect()
 
     Returns:
-      List of (class_id, x_center, y_center, width, height) tuples,
+      List of (class_id, x_center, y_center, width, height, confidence) tuples,
       all normalized to 0-1. Uses COCO class IDs directly.
     """
     boxes = results[0].boxes
@@ -122,6 +122,7 @@ class VehicleDetector:
     if boxes.cls is not None and len(boxes.cls) > 0:
       class_ids = boxes.cls.cpu().numpy().astype(int)
       xywhn = boxes.xywhn.cpu().numpy()  # Normalized [x_center, y_center, w, h]
+      confs = boxes.conf.cpu().numpy()  # Confidence scores
 
       for i in range(len(class_ids)):
         detections.append((
@@ -129,7 +130,8 @@ class VehicleDetector:
           xywhn[i][0],  # x_center
           xywhn[i][1],  # y_center
           xywhn[i][2],  # width
-          xywhn[i][3]   # height
+          xywhn[i][3],  # height
+          confs[i]      # confidence
         ))
 
     return detections

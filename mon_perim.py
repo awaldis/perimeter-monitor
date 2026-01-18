@@ -328,8 +328,8 @@ def main():
 
         cv2.imwrite(jpg_path, cropped_frame)
         with open(txt_path, 'w') as f:
-          for class_id, x, y, w, h in detections:
-            f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f}\n")
+          for class_id, x, y, w, h, conf in detections:
+            f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f} {conf:.6f}\n")
 
       # Status updates
       if is_rtsp:
