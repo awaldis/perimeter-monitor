@@ -84,14 +84,21 @@ class ClipRecorder:
         vehicle_type = 'vehicle'
 
       # Format timestamp as local time (ISO 8601 style)
-      timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+      now = datetime.now()
+      date_dir = now.strftime('%Y-%m-%d')
+      timestamp = now.strftime('%Y-%m-%dT%H-%M-%S')
       clip_basename = f"{vehicle_type}_{timestamp}"
+
+      # Create date subdirectory
+      day_output_dir = os.path.join(self.output_dir, date_dir)
+      os.makedirs(day_output_dir, exist_ok=True)
+
       self.current_clip_filename = os.path.join(
-        self.output_dir,
+        day_output_dir,
         f"{clip_basename}.avi"
       )
       self.current_frames_dir = os.path.join(
-        self.output_dir,
+        day_output_dir,
         f"{clip_basename}_frames"
       )
       os.makedirs(self.current_frames_dir, exist_ok=True)

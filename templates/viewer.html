@@ -255,7 +255,11 @@
       card.className = 'detection-card' + (isNew ? ' new' : '');
       card.dataset.name = detection.name;
 
-      const thumbnailPath = `/image/${detection.name}_frames/frame_0003.jpg`;
+      // Build thumbnail path, accounting for date subdirectory
+      const basePath = detection.date_subdir
+        ? `${detection.date_subdir}/${detection.name}_frames`
+        : `${detection.name}_frames`;
+      const thumbnailPath = `/image/${basePath}/frame_0003.jpg`;
 
       card.innerHTML = `
         <img src="${thumbnailPath}" alt="${detection.vehicle_type}" loading="lazy">
