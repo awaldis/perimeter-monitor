@@ -97,13 +97,20 @@ def parse_detection_name(dirname):
   }
 
 
-def get_thumbnail_path(detection_name):
+def is_date_directory(name):
+  """Check if directory name matches YYYY-MM-DD format."""
+  return bool(re.match(r'^\d{4}-\d{2}-\d{2}$', name))
+
+
+def get_thumbnail_path(detection_name, date_subdir=None):
   """Get the path to frame_0003.jpg for a detection."""
+  if date_subdir:
+    return f"{date_subdir}/{detection_name}_frames/frame_0003.jpg"
   return f"{detection_name}_frames/frame_0003.jpg"
 
 
 def scan_existing_detections():
-  """Scan CLIPS_DIR for existing detection directories."""
+  """Scan CLIPS_DIR for existing detection directories (both new and legacy structure)."""
   global known_detections
 
   detections = []
@@ -112,15 +119,31 @@ def scan_existing_detections():
   if not clips_path.exists():
     return
 
+  def process_frames_dir(item, date_subdir=None):
+    """Process a _frames directory and return detection info if valid."""
+    thumbnail = item / 'frame_0003.jpg'
+    if thumbnail.exists():
+      info = parse_detection_name(item.name)
+      if info:
+        info['mtime'] = item.stat().st_mtime
+        info['date_subdir'] = date_subdir
+        return info
+    return None
+
   for item in clips_path.iterdir():
-    if item.is_dir() and item.name.endswith('_frames'):
-      # Check if frame_0003.jpg exists
-      thumbnail = item / 'frame_0003.jpg'
-      if thumbnail.exists():
-        info = parse_detection_name(item.name)
+    if item.is_dir():
+      if item.name.endswith('_frames'):
+        # Legacy flat structure: detection directly in CLIPS_DIR
+        info = process_frames_dir(item, date_subdir=None)
         if info:
-          info['mtime'] = item.stat().st_mtime
           detections.append(info)
+      elif is_date_directory(item.name):
+        # New structure: YYYY-MM-DD subdirectory
+        for subitem in item.iterdir():
+          if subitem.is_dir() and subitem.name.endswith('_frames'):
+            info = process_frames_dir(subitem, date_subdir=item.name)
+            if info:
+              detections.append(info)
 
   # Sort by modification time, newest first
   detections.sort(key=lambda x: x['mtime'], reverse=True)
@@ -142,15 +165,23 @@ class DetectionHandler(FileSystemEventHandler):
       dir_path = Path(event.src_path)
       dirname = dir_path.name
 
+      # Check if this is in a date subdirectory
+      parent_name = dir_path.parent.name
+      clips_path = Path(CLIPS_DIR).resolve()
+      if dir_path.parent.resolve() != clips_path and is_date_directory(parent_name):
+        date_subdir = parent_name
+      else:
+        date_subdir = None
+
       # Start a thread to wait for frame_0003.jpg
       thread = threading.Thread(
         target=self._wait_for_thumbnail,
-        args=(dir_path, dirname)
+        args=(dir_path, dirname, date_subdir)
       )
       thread.daemon = True
       thread.start()
 
-  def _wait_for_thumbnail(self, dir_path, dirname):
+  def _wait_for_thumbnail(self, dir_path, dirname, date_subdir):
     """Wait for frame_0003.jpg to appear, then notify clients."""
     thumbnail_path = dir_path / 'frame_0003.jpg'
 
@@ -161,13 +192,14 @@ class DetectionHandler(FileSystemEventHandler):
         info = parse_detection_name(dirname)
         if info:
           info['mtime'] = time.time()
+          info['date_subdir'] = date_subdir
 
-          # Add to known detections
+          # Add to known detections (skip if already exists)
           with detections_lock:
-            known_detections.insert(0, info)
-
-          # Broadcast to all connected clients
-          broadcast_event(info)
+            if not any(d['name'] == info['name'] for d in known_detections):
+              known_detections.insert(0, info)
+              # Broadcast to all connected clients
+              broadcast_event(info)
         return
       time.sleep(0.1)
 
@@ -176,7 +208,7 @@ def start_watcher():
   """Start the directory watcher in a background thread."""
   observer = Observer()
   handler = DetectionHandler()
-  observer.schedule(handler, CLIPS_DIR, recursive=False)
+  observer.schedule(handler, CLIPS_DIR, recursive=True)
   observer.start()
   return observer
 
@@ -240,14 +272,30 @@ def get_detections():
 @app.route('/frames/<detection_name>')
 def get_frames(detection_name):
   """Return JSON list of all frames for a detection."""
-  frames_dir = Path(CLIPS_DIR) / f"{detection_name}_frames"
+  clips_path = Path(CLIPS_DIR)
+
+  # Look up the detection to get date_subdir
+  date_subdir = None
+  with detections_lock:
+    for det in known_detections:
+      if det['name'] == detection_name:
+        date_subdir = det.get('date_subdir')
+        break
+
+  # Build path based on whether it's in a date subdirectory
+  if date_subdir:
+    frames_dir = clips_path / date_subdir / f"{detection_name}_frames"
+    path_prefix = f"{date_subdir}/{detection_name}_frames"
+  else:
+    frames_dir = clips_path / f"{detection_name}_frames"
+    path_prefix = f"{detection_name}_frames"
 
   if not frames_dir.exists():
     abort(404)
 
   # Security check - ensure we're still within CLIPS_DIR
   try:
-    frames_dir.resolve().relative_to(Path(CLIPS_DIR).resolve())
+    frames_dir.resolve().relative_to(clips_path.resolve())
   except ValueError:
     abort(403)
 
@@ -256,7 +304,7 @@ def get_frames(detection_name):
     if item.suffix == '.jpg':
       frames.append({
         'name': item.stem,
-        'path': f"{detection_name}_frames/{item.name}"
+        'path': f"{path_prefix}/{item.name}"
       })
 
   return jsonify(frames)
