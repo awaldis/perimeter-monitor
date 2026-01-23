@@ -47,7 +47,9 @@ class ClipRecorder:
     self.clip_count = 0
     self.current_writer = None
     self.current_clip_filename = None
-    self.current_frames_dir = None
+    self.current_images_dir = None
+    self.current_labels_dir = None
+    self.current_clip_basename = None
     self.frame_number = 0
 
     # Video codec
@@ -87,21 +89,19 @@ class ClipRecorder:
       now = datetime.now()
       date_dir = now.strftime('%Y-%m-%d')
       timestamp = now.strftime('%Y-%m-%dT%H-%M-%S')
-      clip_basename = f"{vehicle_type}_{timestamp}"
+      self.current_clip_basename = f"{vehicle_type}_{timestamp}"
 
-      # Create date subdirectory
+      # Create date subdirectory with images/ and labels/ subdirs
       day_output_dir = os.path.join(self.output_dir, date_dir)
-      os.makedirs(day_output_dir, exist_ok=True)
+      self.current_images_dir = os.path.join(day_output_dir, 'images')
+      self.current_labels_dir = os.path.join(day_output_dir, 'labels')
+      os.makedirs(self.current_images_dir, exist_ok=True)
+      os.makedirs(self.current_labels_dir, exist_ok=True)
 
       self.current_clip_filename = os.path.join(
         day_output_dir,
-        f"{clip_basename}.avi"
+        f"{self.current_clip_basename}.avi"
       )
-      self.current_frames_dir = os.path.join(
-        day_output_dir,
-        f"{clip_basename}_frames"
-      )
-      os.makedirs(self.current_frames_dir, exist_ok=True)
       self.frame_number = 0
 
       self.current_writer = cv2.VideoWriter(
@@ -170,18 +170,19 @@ class ClipRecorder:
       clean_frame: The frame without annotations
       detections: List of (class_id, x, y, w, h, conf) tuples (normalized 0-1)
     """
-    if self.current_frames_dir is None:
+    if self.current_images_dir is None or self.current_labels_dir is None:
       return
 
     self.frame_number += 1
-    frame_basename = f"frame_{self.frame_number:04d}"
+    # Format: {vehicle}_{timestamp}_{frame_number}
+    frame_basename = f"{self.current_clip_basename}_{self.frame_number:04d}"
 
-    # Save JPEG
-    jpg_path = os.path.join(self.current_frames_dir, f"{frame_basename}.jpg")
+    # Save JPEG to images/
+    jpg_path = os.path.join(self.current_images_dir, f"{frame_basename}.jpg")
     cv2.imwrite(jpg_path, clean_frame)
 
-    # Save YOLO annotation
-    txt_path = os.path.join(self.current_frames_dir, f"{frame_basename}.txt")
+    # Save YOLO annotation to labels/
+    txt_path = os.path.join(self.current_labels_dir, f"{frame_basename}.txt")
     with open(txt_path, 'w') as f:
       if detections:
         for class_id, x, y, w, h, conf in detections:
@@ -195,7 +196,9 @@ class ClipRecorder:
       self.current_writer = None
     self.is_recording = False
     self.frames_since_last_vehicle = 0
-    self.current_frames_dir = None
+    self.current_images_dir = None
+    self.current_labels_dir = None
+    self.current_clip_basename = None
     self.frame_number = 0
 
   def close(self):
