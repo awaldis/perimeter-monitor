@@ -355,10 +355,10 @@ def main():
       # Display
       if args.display:
         cv2.imshow('Perimeter Monitor', annotated_frame)
-      key = cv2.waitKey(1) & 0xFF
-      if key == ord('q'):
-        print("\nQuitting...")
-        break
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+          print("\nQuitting...")
+          break
 
       frame_count += 1
       loop_times.append(time.time() - loop_start)
