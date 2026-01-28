@@ -7,15 +7,7 @@ import cv2
 import os
 from datetime import datetime
 
-from config import CLIP_BUFFER_SECONDS
-
-# COCO class ID to name mapping
-COCO_CLASS_NAMES = {
-  2: 'car',
-  3: 'motorcycle',
-  5: 'bus',
-  7: 'truck'
-}
+from config import CLIP_BUFFER_SECONDS, CLASS_NAMES
 
 
 class ClipRecorder:
@@ -81,7 +73,7 @@ class ClipRecorder:
       # Determine vehicle type from first detection
       if detections and len(detections) > 0:
         first_class_id = detections[0][0]
-        vehicle_type = COCO_CLASS_NAMES.get(first_class_id, 'vehicle')
+        vehicle_type = CLASS_NAMES.get(first_class_id, 'vehicle')
       else:
         vehicle_type = 'vehicle'
 
