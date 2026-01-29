@@ -21,11 +21,16 @@ from config import (
   CROP_Y1, CROP_Y2, CROP_X1, CROP_X2,
   DEFAULT_FPS,
   STATUS_INTERVAL_SECONDS,
-  QUEUE_WARNING_INTERVAL
+  QUEUE_WARNING_INTERVAL,
+  CLASS_NAMES,
+  TELEGRAM_BOT_TOKEN,
+  TELEGRAM_CHAT_ID,
+  ALERT_VEHICLE_CLASSES
 )
 from video_reader import VideoStreamReader
 from vehicle_detector import VehicleDetector
 from clip_recorder import ClipRecorder
+from telegram_alert import TelegramAlerter
 
 # Import local configuration for clips directory (with fallback)
 try:
@@ -243,7 +248,18 @@ def main():
   if is_rtsp:
     recorder = ClipRecorder(output_dir, fps, width, height)
     out = None
+
+    # Setup Telegram alerter (only for RTSP/live mode)
+    alerter = TelegramAlerter(
+      TELEGRAM_BOT_TOKEN,
+      TELEGRAM_CHAT_ID,
+      ALERT_VEHICLE_CLASSES,
+      CLASS_NAMES
+    )
+    if alerter.is_enabled():
+      alerter.send_startup_message()
   else:
+    alerter = None
     recorder = None
     # Ensure output directory exists for file mode
     output_file_dir = os.path.dirname(output_video)
@@ -296,7 +312,7 @@ def main():
 
       # Get annotated frame and detection results
       annotated_frame = detector.get_annotated_frame(results)
-      vehicle_detected, detections_by_class = detector.get_detections(results)
+      vehicle_detected, detections_by_class, class_ids_by_track = detector.get_detections(results)
       detections = detector.get_detection_boxes(results)
 
       # Log detections
@@ -304,10 +320,14 @@ def main():
         for class_name, track_ids in detections_by_class.items():
           print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
 
-      # Handle recording
+      # Handle recording and alerts
       if is_rtsp:
         if vehicle_detected:
           recorder.on_vehicle_detected(annotated_frame, cropped_frame, detections)
+
+          # Check for Telegram alerts
+          if alerter and alerter.is_enabled():
+            alerter.check_and_alert(detections_by_class, annotated_frame, class_ids_by_track)
         else:
           recorder.on_no_vehicle(annotated_frame, cropped_frame, detections)
 
