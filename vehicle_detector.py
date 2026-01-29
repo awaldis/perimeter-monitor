@@ -85,12 +85,14 @@ class VehicleDetector:
       results: YOLO results from detect()
 
     Returns:
-      Tuple of (vehicle_detected, detections) where:
+      Tuple of (vehicle_detected, detections, class_ids_by_track) where:
         - vehicle_detected: True if any vehicle was detected
         - detections: Dict mapping class_name -> list of track IDs
+        - class_ids_by_track: Dict mapping track_id -> class_id
     """
     boxes = results[0].boxes
     detections = {}
+    class_ids_by_track = {}
 
     if boxes.id is not None:
       class_ids = boxes.cls.cpu().numpy().astype(int)
@@ -101,9 +103,10 @@ class VehicleDetector:
         if class_name not in detections:
           detections[class_name] = []
         detections[class_name].append(int(track_id))
+        class_ids_by_track[int(track_id)] = int(class_id)
 
     vehicle_detected = len(detections) > 0
-    return vehicle_detected, detections
+    return vehicle_detected, detections, class_ids_by_track
 
   def get_detection_boxes(self, results):
     """

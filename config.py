@@ -37,6 +37,11 @@ READER_QUEUE_SIZE = 3          # Number of frames to buffer
 FPS_DRAIN_FRAMES = 30          # Frames to discard when measuring FPS
 FPS_MEASURE_FRAMES = 15        # Frames to measure FPS over
 
+# Telegram alerts (disabled by default - configure in config_local.py)
+TELEGRAM_BOT_TOKEN = None      # Set in config_local.py
+TELEGRAM_CHAT_ID = None        # Set in config_local.py
+ALERT_VEHICLE_CLASSES = []     # List of class IDs that trigger alerts (e.g., [4, 5, 6, 7])
+
 # Override any settings with machine-specific config (not in git)
 try:
   from config_local import *
