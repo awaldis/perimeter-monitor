@@ -45,7 +45,7 @@ class TelegramAlerter:
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     alert_names = [self.class_names.get(c, f"class_{c}") for c in self.alert_classes]
-    message = f"🚗 Perimeter Monitor Started\n⏰ {timestamp}\n📋 Alerting on: {', '.join(alert_names)}"
+    message = f"Perimeter Monitor Started\n{timestamp}\nAlerting on: {', '.join(alert_names)}"
 
     self._send_message(message)
 
@@ -92,7 +92,7 @@ class TelegramAlerter:
   def _send_vehicle_alert(self, class_name, track_id, frame):
     """Send an alert for a detected vehicle with image."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    message = f"🚚 {class_name.upper()} Detected!\n⏰ {timestamp}\n🔢 Track ID: {track_id}"
+    message = f"{class_name.upper()} Detected\n{timestamp}\nTrack ID: {track_id}"
 
     # Save frame to temporary file
     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
