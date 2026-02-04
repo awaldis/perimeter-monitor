@@ -54,4 +54,18 @@ val_view.export(
   classes=output_classes
 )
 
+# Fix dataset.yaml path for Colab compatibility
+import os
+import yaml
+
+yaml_path = os.path.join(EXPORT_DIR, "dataset.yaml")
+with open(yaml_path, 'r') as f:
+  config = yaml.safe_load(f)
+
+config['path'] = '.'
+
+with open(yaml_path, 'w') as f:
+  yaml.dump(config, f, default_flow_style=False)
+
+print(f"Fixed {yaml_path}: set path to '.'")
 print("Export complete!")
