@@ -68,4 +68,9 @@ with open(yaml_path, 'w') as f:
   yaml.dump(config, f, default_flow_style=False)
 
 print(f"Fixed {yaml_path}: set path to '.'")
+
+# Create zip file for Colab upload
+import shutil
+zip_path = shutil.make_archive(EXPORT_DIR, 'zip', EXPORT_DIR)
+print(f"Created zip: {zip_path}")
 print("Export complete!")
