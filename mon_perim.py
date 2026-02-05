@@ -25,7 +25,8 @@ from config import (
   CLASS_NAMES,
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
-  ALERT_VEHICLE_CLASSES
+  ALERT_VEHICLE_CLASSES,
+  ALERT_EDGE_MARGIN
 )
 from video_reader import VideoStreamReader
 from vehicle_detector import VehicleDetector
@@ -254,7 +255,8 @@ def main():
       TELEGRAM_BOT_TOKEN,
       TELEGRAM_CHAT_ID,
       ALERT_VEHICLE_CLASSES,
-      CLASS_NAMES
+      CLASS_NAMES,
+      ALERT_EDGE_MARGIN
     )
     if alerter.is_enabled():
       alerter.send_startup_message()
@@ -312,7 +314,7 @@ def main():
 
       # Get annotated frame and detection results
       annotated_frame = detector.get_annotated_frame(results)
-      vehicle_detected, detections_by_class, class_ids_by_track = detector.get_detections(results)
+      vehicle_detected, detections_by_class, class_ids_by_track, boxes_by_track = detector.get_detections(results)
       detections = detector.get_detection_boxes(results)
 
       # Log detections
@@ -327,7 +329,7 @@ def main():
 
           # Check for Telegram alerts
           if alerter and alerter.is_enabled():
-            alerter.check_and_alert(detections_by_class, annotated_frame, class_ids_by_track)
+            alerter.check_and_alert(detections_by_class, annotated_frame, class_ids_by_track, boxes_by_track)
         else:
           recorder.on_no_vehicle(annotated_frame, cropped_frame, detections)
 
