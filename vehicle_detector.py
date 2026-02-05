@@ -85,28 +85,35 @@ class VehicleDetector:
       results: YOLO results from detect()
 
     Returns:
-      Tuple of (vehicle_detected, detections, class_ids_by_track) where:
+      Tuple of (vehicle_detected, detections, class_ids_by_track, boxes_by_track) where:
         - vehicle_detected: True if any vehicle was detected
         - detections: Dict mapping class_name -> list of track IDs
         - class_ids_by_track: Dict mapping track_id -> class_id
+        - boxes_by_track: Dict mapping track_id -> (x_center, y_center, width, height) normalized 0-1
     """
     boxes = results[0].boxes
     detections = {}
     class_ids_by_track = {}
+    boxes_by_track = {}
 
     if boxes.id is not None:
       class_ids = boxes.cls.cpu().numpy().astype(int)
       track_ids = boxes.id.cpu().numpy().astype(int)
+      xywhn = boxes.xywhn.cpu().numpy()
 
-      for class_id, track_id in zip(class_ids, track_ids):
+      for i, (class_id, track_id) in enumerate(zip(class_ids, track_ids)):
         class_name = CLASS_NAMES.get(class_id, f'class_{class_id}')
         if class_name not in detections:
           detections[class_name] = []
         detections[class_name].append(int(track_id))
         class_ids_by_track[int(track_id)] = int(class_id)
+        boxes_by_track[int(track_id)] = (
+          float(xywhn[i][0]), float(xywhn[i][1]),
+          float(xywhn[i][2]), float(xywhn[i][3])
+        )
 
     vehicle_detected = len(detections) > 0
-    return vehicle_detected, detections, class_ids_by_track
+    return vehicle_detected, detections, class_ids_by_track, boxes_by_track
 
   def get_detection_boxes(self, results):
     """

@@ -41,6 +41,7 @@ FPS_MEASURE_FRAMES = 15        # Frames to measure FPS over
 TELEGRAM_BOT_TOKEN = None      # Set in config_local.py
 TELEGRAM_CHAT_ID = None        # Set in config_local.py
 ALERT_VEHICLE_CLASSES = []     # List of class IDs that trigger alerts (e.g., [4, 5, 6, 7])
+ALERT_EDGE_MARGIN = 0.10       # Min distance from left/right frame edge (0.05 = 5% of frame width)
 
 # Override any settings with machine-specific config (not in git)
 try:
