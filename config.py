@@ -43,6 +43,10 @@ TELEGRAM_CHAT_ID = None        # Set in config_local.py
 ALERT_VEHICLE_CLASSES = []     # List of class IDs that trigger alerts (e.g., [4, 5, 6, 7])
 ALERT_EDGE_MARGIN = 0.10       # Min distance from left/right frame edge (0.05 = 5% of frame width)
 
+# Stall detection (ignore parked/stationary vehicles)
+STALL_SECONDS = 5.0            # Seconds of no movement before a vehicle is considered stalled
+STALL_MOVEMENT_THRESHOLD = 0.01  # Normalized distance (1% of frame) below which a vehicle is "not moving"
+
 # Override any settings with machine-specific config (not in git)
 try:
   from config_local import *
