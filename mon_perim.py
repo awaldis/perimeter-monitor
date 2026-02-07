@@ -26,12 +26,15 @@ from config import (
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
   ALERT_VEHICLE_CLASSES,
-  ALERT_EDGE_MARGIN
+  ALERT_EDGE_MARGIN,
+  STALL_SECONDS,
+  STALL_MOVEMENT_THRESHOLD
 )
 from video_reader import VideoStreamReader
 from vehicle_detector import VehicleDetector
 from clip_recorder import ClipRecorder
 from telegram_alert import TelegramAlerter
+from stall_tracker import StallTracker
 
 # Import local configuration for clips directory (with fallback)
 try:
@@ -248,6 +251,7 @@ def main():
   # Setup output (recorder for RTSP, simple writer for files)
   if is_rtsp:
     recorder = ClipRecorder(output_dir, fps, width, height)
+    stall_tracker = StallTracker(STALL_SECONDS, STALL_MOVEMENT_THRESHOLD, fps)
     out = None
 
     # Setup Telegram alerter (only for RTSP/live mode)
@@ -317,19 +321,27 @@ def main():
       vehicle_detected, detections_by_class, class_ids_by_track, boxes_by_track = detector.get_detections(results)
       detections = detector.get_detection_boxes(results)
 
-      # Log detections
-      if detections_by_class:
-        for class_name, track_ids in detections_by_class.items():
-          print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
-
       # Handle recording and alerts
       if is_rtsp:
-        if vehicle_detected:
+        # Filter out stalled (parked/stationary) vehicles
+        stalled_ids = stall_tracker.update(boxes_by_track)
+        active_detections_by_class = {}
+        for class_name, track_ids in detections_by_class.items():
+          active_ids = [tid for tid in track_ids if tid not in stalled_ids]
+          if active_ids:
+            active_detections_by_class[class_name] = active_ids
+        active_vehicle_detected = len(active_detections_by_class) > 0
+
+        # Log only active (non-stalled) detections
+        for class_name, track_ids in active_detections_by_class.items():
+          print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
+
+        if active_vehicle_detected:
           recorder.on_vehicle_detected(annotated_frame, cropped_frame, detections)
 
           # Check for Telegram alerts
           if alerter and alerter.is_enabled():
-            alerter.check_and_alert(detections_by_class, annotated_frame, class_ids_by_track, boxes_by_track)
+            alerter.check_and_alert(active_detections_by_class, annotated_frame, class_ids_by_track, boxes_by_track)
         else:
           recorder.on_no_vehicle(annotated_frame, cropped_frame, detections)
 
@@ -341,6 +353,10 @@ def main():
           print(f"[{timestamp}] WARNING: Processing too slow! {queue_size} frames buffered")
           last_queue_warning_time = current_time
       else:
+        # Log detections (file mode - no stall filtering)
+        for class_name, track_ids in detections_by_class.items():
+          print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
+
         out.write(annotated_frame)
 
         # Save training frame (JPEG + YOLO annotation)
