@@ -5,7 +5,8 @@ Before running, set EXPORT_DIR in your IPython session:
   EXPORT_DIR = "/path/to/training_set_2026_02_01"
   %run -i export_for_training.py
 
-Requires: dataset, new_sample_view (from your FiftyOne session)
+Requires: dataset (from your FiftyOne session)
+Optional: new_sample_view (if set, tags new samples as master_set)
 """
 
 if 'fo' not in dir():
@@ -17,9 +18,10 @@ if 'four' not in dir():
 if 'EXPORT_DIR' not in dir():
   raise NameError("Set EXPORT_DIR before running: EXPORT_DIR = '/path/to/export'")
 
-# Tag new samples for inclusion in master set
-new_sample_view.tag_samples("master_set")
-new_sample_view.untag_samples("keep")
+# Tag new samples for inclusion in master set (if new_sample_view is defined)
+if 'new_sample_view' in dir():
+  new_sample_view.tag_samples("master_set")
+  new_sample_view.untag_samples("keep")
 
 # Get all samples with ground_truth labels tagged as master_set
 master_set_view = dataset.exists("ground_truth").match_tags("master_set")
