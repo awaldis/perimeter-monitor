@@ -16,16 +16,18 @@ Directory structure:
           └── car_2026-01-22T14-30-45_0002.txt
 
 Usage:
-  python detection_viewer_v2.py
+  python detection_viewer_v2.py [--days N]
   Then open http://localhost:8081 in a browser
 """
 
+import argparse
 import json
 import os
 import queue
 import re
 import threading
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, abort
@@ -37,6 +39,9 @@ try:
   from config_local import CLIPS_DIR
 except ImportError:
   CLIPS_DIR = "clips"
+
+# Date cutoff for filtering old detections (set in main() from --days arg)
+cutoff_date = None  # YYYY-MM-DD string or None for no filtering
 
 app = Flask(__name__)
 
@@ -106,6 +111,10 @@ def scan_existing_detections():
 
   for date_dir in clips_path.iterdir():
     if not date_dir.is_dir() or not is_date_directory(date_dir.name):
+      continue
+
+    # Skip entire date directories older than the cutoff
+    if cutoff_date and date_dir.name < cutoff_date:
       continue
 
     images_dir = date_dir / 'images'
@@ -260,6 +269,10 @@ def poll_for_new_detections():
 
       for date_dir in clips_path.iterdir():
         if not date_dir.is_dir() or not is_date_directory(date_dir.name):
+          continue
+
+        # Skip entire date directories older than the cutoff
+        if cutoff_date and date_dir.name < cutoff_date:
           continue
 
         images_dir = date_dir / 'images'
@@ -453,9 +466,23 @@ def serve_image(filepath):
 
 def main():
   """Main entry point."""
+  global cutoff_date
+
+  parser = argparse.ArgumentParser(description='Detection Viewer V2 - Web-based detection viewer')
+  parser.add_argument('-d', '--days', type=int, default=None,
+                      help='Only show detections from the last N days')
+  args = parser.parse_args()
+
+  if args.days is not None:
+    cutoff_date = (datetime.now() - timedelta(days=args.days)).strftime('%Y-%m-%d')
+
   print(f"Detection Viewer V2 (FiftyOne-compatible structure)")
   print(f"===================================================")
   print(f"Monitoring: {CLIPS_DIR}")
+  if cutoff_date:
+    print(f"Showing detections from: {cutoff_date} onward ({args.days} days)")
+  else:
+    print(f"Showing: all detections")
 
   # Ensure clips directory exists
   os.makedirs(CLIPS_DIR, exist_ok=True)
