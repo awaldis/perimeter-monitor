@@ -23,7 +23,7 @@ python verify_setup.py
 ### 4. Test Run
 ```bash
 # Test with your RTSP stream
-python mon_perim.py -t udp "rtsp://admin:Dexter8@192.168.50.60:554/rtsp/streaming?channel=02&subtype=0"
+python mon_perim.py -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=0"
 ```
 
 ## Intel GPU Optimization (Recommended for i5-1135G7)
@@ -68,7 +68,7 @@ python mon_perim.py --help
 ### 1. Use Lower Resolution Stream
 ```bash
 # Use subtype=1 for 720p instead of subtype=0 for 4K
-python mon_perim.py -t udp "rtsp://admin:Dexter8@192.168.50.60:554/rtsp/streaming?channel=02&subtype=1"
+python mon_perim.py -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=1"
 ```
 
 ### 2. Reduce Detection Image Size
@@ -115,7 +115,7 @@ pip install onnxruntime-openvino
 ### Issue: "Could not open video source"
 ```bash
 # Test RTSP stream with ffplay
-ffplay -rtsp_transport udp "rtsp://admin:Dexter8@192.168.50.60:554/rtsp/streaming?channel=02&subtype=1"
+ffplay -rtsp_transport udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=1"
 
 # If that works but mon_perim.py doesn't:
 # - Check firewall rules
