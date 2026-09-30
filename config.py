@@ -37,6 +37,9 @@ READER_QUEUE_SIZE = 3          # Number of frames to buffer
 FPS_DRAIN_FRAMES = 30          # Frames to discard when measuring FPS
 FPS_MEASURE_FRAMES = 15        # Frames to measure FPS over
 
+# RTSP reconnection (stream drops, or server stops sending data)
+RECONNECT_DELAY_SECONDS = 5.0  # Wait between reconnect attempts (retries forever)
+
 # Telegram alerts (disabled by default - configure in config_local.py)
 TELEGRAM_BOT_TOKEN = None      # Set in config_local.py
 TELEGRAM_CHAT_ID = None        # Set in config_local.py
