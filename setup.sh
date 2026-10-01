@@ -59,14 +59,10 @@ echo
 echo "Upgrading pip..."
 pip install --upgrade pip
 
-# Install PyTorch (CPU version - smaller and faster for inference)
+# Install pinned dependencies (requirements.txt pulls CPU-only PyTorch from
+# the PyTorch index; see "Managing Dependencies" in README.md)
 echo
-echo "Installing PyTorch (CPU version)..."
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# Install other dependencies
-echo
-echo "Installing other Python dependencies..."
+echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
 # Download YOLO model if not present

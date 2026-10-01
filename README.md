@@ -55,14 +55,43 @@ source venv/bin/activate
    source venv/bin/activate
    ```
 
-3. **Install Python dependencies**:
+3. **Install Python dependencies** (pinned; includes CPU-only PyTorch):
    ```bash
-   # CPU-only PyTorch (smaller, faster for inference)
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-   # Other dependencies
    pip install -r requirements.txt
+
+   # Optional: dataset/export tools (FiftyOne, OpenVINO).
+   # --no-deps is required so fiftyone doesn't pull in opencv-python-headless,
+   # which would break cv2.imshow.
+   pip install --no-deps -r requirements-dev.txt
    ```
+
+### Managing Dependencies
+
+Dependencies are declared in `.in` files and compiled into pinned lock files
+with [uv](https://docs.astral.sh/uv/):
+
+| Source (edit this)    | Lock file (generated)  | Contents                          |
+|-----------------------|------------------------|-----------------------------------|
+| `requirements.in`     | `requirements.txt`     | Runtime: monitor, viewers         |
+| `requirements-dev.in` | `requirements-dev.txt` | FiftyOne scripts, OpenVINO export |
+
+Never edit the `.txt` files by hand. To add, remove, or upgrade a package:
+
+```bash
+# 1. Edit requirements.in / requirements-dev.in, then recompile:
+uv pip compile requirements.in -o requirements.txt \
+    --index-strategy unsafe-best-match --emit-index-url
+uv pip compile requirements-dev.in -o requirements-dev.txt \
+    --index-strategy unsafe-best-match --emit-index-url \
+    --no-emit-package opencv-python-headless
+
+# To upgrade: add -P <package> (one package) or -U (everything) to the commands above.
+
+# 2. Make the venv match the lock files exactly (removes anything not listed):
+uv pip sync --python venv/bin/python requirements.txt requirements-dev.txt
+```
+
+Commit the `.in` and `.txt` files together.
 
 4. **Download YOLO model** (optional, will auto-download on first run):
    ```bash

@@ -1,0 +1,17 @@
+# Runtime dependencies for perimeter-monitor (monitor, detection viewers).
+# This is the source of truth -- edit this file, then regenerate the lock file:
+#   uv pip compile requirements.in -o requirements.txt --index-strategy unsafe-best-match --emit-index-url
+# Dataset/training tools live in requirements-dev.in.
+
+# CPU-only PyTorch wheels (no CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch
+torchvision
+ultralytics
+onnxruntime
+opencv-python
+requests
+pyyaml
+flask
+watchdog
