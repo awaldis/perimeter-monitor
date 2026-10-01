@@ -75,6 +75,9 @@ with [uv](https://docs.astral.sh/uv/):
 | `requirements.in`     | `requirements.txt`     | Runtime: monitor, viewers         |
 | `requirements-dev.in` | `requirements-dev.txt` | FiftyOne scripts, OpenVINO export |
 
+`uv.toml` sets `index-strategy = "unsafe-best-match"` so uv considers both PyPI
+and the PyTorch CPU index (as pip does); run uv commands from the repo root.
+
 Never edit the `.txt` files by hand. To add, remove, or upgrade a package:
 
 ```bash

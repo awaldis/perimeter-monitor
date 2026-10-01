@@ -1,0 +1,4 @@
+# uv settings for this repo. requirements.txt uses both PyPI and the PyTorch
+# CPU index; let uv pick the best match across them (same as pip does).
+[pip]
+index-strategy = "unsafe-best-match"
