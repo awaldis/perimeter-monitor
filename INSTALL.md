@@ -136,7 +136,8 @@ The setup.sh script will install everything, but these are the files needed:
 ### Required Files
 - ✓ All Python source files (*.py)
 - ✓ setup.sh
-- ✓ requirements.txt
+- ✓ requirements.in / requirements.txt
+- requirements-dev.in / requirements-dev.txt (only for FiftyOne/OpenVINO tools)
 - ✓ README.md
 - ✓ config.py
 

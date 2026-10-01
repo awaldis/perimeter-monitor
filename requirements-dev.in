@@ -1,0 +1,11 @@
+# Dataset curation / model export tools (FiftyOne scripts, export_openvino.py).
+# Edit this file, then regenerate the lock file:
+#   uv pip compile requirements-dev.in -o requirements-dev.txt --index-strategy unsafe-best-match \
+#     --emit-index-url --no-emit-package opencv-python-headless
+# opencv-python-headless (pulled in by fiftyone) is excluded because it clobbers
+# opencv-python's cv2 module, which needs GUI support for cv2.imshow.
+
+-c requirements.txt
+
+fiftyone
+openvino
