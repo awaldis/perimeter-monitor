@@ -9,6 +9,7 @@
 torch
 torchvision
 ultralytics
+lap             # needed by ultralytics tracker (model.track); not auto-installed
 onnxruntime
 opencv-python
 requests
