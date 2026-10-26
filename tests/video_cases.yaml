@@ -1,0 +1,21 @@
+# Video regression cases for tests/test_video_cases.py.
+#
+# Each case runs the whole video through FramePipeline (the same per-frame
+# logic as live monitoring). Within [start_frame, end_frame] the only active
+# (non-stalled) vehicle class on every frame must be expected_class.
+#
+# Frame numbers are 0-based and inclusive, matching the "Frame N" lines that
+# mon_perim.py prints. Videos are not in git; missing files are skipped.
+
+video_dir: input_4K   # relative to the repo root
+
+cases:
+  - file: 2025-12-09-MailTruck.mp4
+    start_frame: 98
+    end_frame: 143
+    expected_class: usmail_truck
+
+  - file: single_pickup_north_snow_5_seconds.mp4
+    start_frame: 21
+    end_frame: 28
+    expected_class: pickup_truck

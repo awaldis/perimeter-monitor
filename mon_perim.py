@@ -26,15 +26,13 @@ from config import (
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
   ALERT_VEHICLE_CLASSES,
-  ALERT_EDGE_MARGIN,
-  STALL_SECONDS,
-  STALL_MOVEMENT_THRESHOLD
+  ALERT_EDGE_MARGIN
 )
 from video_reader import VideoStreamReader
 from vehicle_detector import VehicleDetector
 from clip_recorder import ClipRecorder
 from telegram_alert import TelegramAlerter
-from stall_tracker import StallTracker
+from frame_pipeline import FramePipeline
 
 # Import local configuration for clips directory (with fallback)
 try:
@@ -166,7 +164,7 @@ def print_file_status(current_fps, frame_count, total_frames):
     print(f"FPS: {current_fps:.2f} | % complete: N/A")
 
 
-def print_timing_stats(loop_times, read_times, track_times):
+def print_timing_stats(loop_times, read_times, process_times):
   """Print performance timing statistics."""
   print("\nPerformance Timing Statistics:")
   print(f"{'Metric':<20} {'Min (ms)':>10} {'Max (ms)':>10} {'Avg (ms)':>10} {'Frames':>10}")
@@ -175,7 +173,7 @@ def print_timing_stats(loop_times, read_times, track_times):
   stats = [
     ("Loop time", loop_times),
     ("reader.read()", read_times),
-    ("model.track()", track_times)
+    ("pipeline.process()", process_times)
   ]
 
   for label, times in stats:
@@ -244,6 +242,9 @@ def main():
   # Determine FPS for output
   fps = determine_fps(reader, measured_fps, is_rtsp)
 
+  # Shared per-frame logic (detection, tracking, stall filtering)
+  pipeline = FramePipeline(detector, fps)
+
   # Calculate crop dimensions
   width = CROP_X2 - CROP_X1
   height = CROP_Y2 - CROP_Y1
@@ -251,7 +252,6 @@ def main():
   # Setup output (recorder for RTSP, simple writer for files)
   if is_rtsp:
     recorder = ClipRecorder(output_dir, fps, width, height)
-    stall_tracker = StallTracker(STALL_SECONDS, STALL_MOVEMENT_THRESHOLD, fps)
     out = None
 
     # Setup Telegram alerter (only for RTSP/live mode)
@@ -289,7 +289,7 @@ def main():
   overall_start_time = time.time()
   loop_times = []
   read_times = []
-  track_times = []
+  process_times = []
 
   # RTSP-specific state
   if is_rtsp:
@@ -308,40 +308,28 @@ def main():
       if not success:
         break
 
-      # Crop frame
-      cropped_frame = frame[CROP_Y1:CROP_Y2, CROP_X1:CROP_X2]
+      # Crop, detect, track, and filter out stalled vehicles
+      process_start = time.time()
+      result = pipeline.process(frame)
+      process_times.append(time.time() - process_start)
 
-      # Detect vehicles
-      track_start = time.time()
-      results = detector.detect(cropped_frame)
-      track_times.append(time.time() - track_start)
+      annotated_frame = result.annotated_frame
+      cropped_frame = result.cropped_frame
+      detections = result.detections
 
-      # Get annotated frame and detection results
-      annotated_frame = detector.get_annotated_frame(results)
-      vehicle_detected, detections_by_class, class_ids_by_track, boxes_by_track = detector.get_detections(results)
-      detections = detector.get_detection_boxes(results)
+      # Log only active (non-stalled) detections
+      for class_name, track_ids in result.active_detections_by_class.items():
+        print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
 
       # Handle recording and alerts
       if is_rtsp:
-        # Filter out stalled (parked/stationary) vehicles
-        stalled_ids = stall_tracker.update(boxes_by_track)
-        active_detections_by_class = {}
-        for class_name, track_ids in detections_by_class.items():
-          active_ids = [tid for tid in track_ids if tid not in stalled_ids]
-          if active_ids:
-            active_detections_by_class[class_name] = active_ids
-        active_vehicle_detected = len(active_detections_by_class) > 0
-
-        # Log only active (non-stalled) detections
-        for class_name, track_ids in active_detections_by_class.items():
-          print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
-
-        if active_vehicle_detected:
+        if result.active_vehicle_detected:
           recorder.on_vehicle_detected(annotated_frame, cropped_frame, detections)
 
           # Check for Telegram alerts
           if alerter and alerter.is_enabled():
-            alerter.check_and_alert(active_detections_by_class, annotated_frame, class_ids_by_track, boxes_by_track)
+            alerter.check_and_alert(result.active_detections_by_class, annotated_frame,
+                                    result.class_ids_by_track, result.boxes_by_track)
         else:
           recorder.on_no_vehicle(annotated_frame, cropped_frame, detections)
 
@@ -353,10 +341,6 @@ def main():
           print(f"[{timestamp}] WARNING: Processing too slow! {queue_size} frames buffered")
           last_queue_warning_time = current_time
       else:
-        # Log detections (file mode - no stall filtering)
-        for class_name, track_ids in detections_by_class.items():
-          print(f"Frame {frame_count}: {class_name.upper()} DETECTED! (IDs: {track_ids})")
-
         out.write(annotated_frame)
 
         # Save training frame (JPEG + YOLO annotation)
@@ -422,7 +406,7 @@ def main():
       overall_fps = frame_count / total_time
       print(f"Overall FPS: {overall_fps:.2f} (processed {frame_count} frames)")
 
-    print_timing_stats(loop_times, read_times, track_times)
+    print_timing_stats(loop_times, read_times, process_times)
 
     if is_rtsp:
       print(f"Done! {recorder.get_clip_count()} clip(s) saved to {recorder.get_output_dir()}")

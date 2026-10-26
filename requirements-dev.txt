@@ -113,6 +113,8 @@ imageio==2.37.2
     # via scikit-image
 inflate64==1.0.4
     # via py7zr
+iniconfig==2.3.1
+    # via pytest
 jinja2==3.1.6
     # via
     #   -c requirements.txt
@@ -183,6 +185,7 @@ packaging==25.0
     #   matplotlib
     #   openvino
     #   plotly
+    #   pytest
     #   scikit-image
     #   strawberry-graphql
     #   voxel51-eta
@@ -200,6 +203,8 @@ pillow==11.3.0
     #   voxel51-eta
 plotly==6.5.2
     # via fiftyone
+pluggy==1.7.0
+    # via pytest
 pprintpp==0.4.0
     # via fiftyone
 priority==2.0.0
@@ -219,6 +224,8 @@ pycryptodomex==3.23.0
     # via py7zr
 pydash==8.0.6
     # via fiftyone
+pygments==2.21.0
+    # via pytest
 pymongo==4.9.2
     # via
     #   fiftyone
@@ -232,6 +239,8 @@ pyparsing==3.2.5
     #   matplotlib
 pyppmd==1.3.1
     # via py7zr
+pytest==9.1.1
+    # via -r requirements-dev.in
 python-dateutil==2.9.0.post0
     # via
     #   -c requirements.txt

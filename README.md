@@ -101,6 +101,24 @@ Commit the `.in` and `.txt` files together.
    wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx
    ```
 
+## Testing
+
+Video regression tests run recorded clips through `FramePipeline`
+(`frame_pipeline.py`), the same per-frame detection, tracking, and stall
+filtering that live monitoring uses:
+
+```bash
+pytest -v
+```
+
+Cases live in `tests/video_cases.yaml`. Each one names a video, an inclusive
+0-based frame range (matching the `Frame N` lines `mon_perim.py` prints), and
+the vehicle class that must be the only active detection on every frame in
+that range. Results depend on `MODEL_PATH` in `config_local.py`.
+
+The videos are not in git (`input_4K/` by default); cases whose video is
+missing are skipped. `pytest` is installed from `requirements-dev.txt`.
+
 ## GPU Configuration
 
 ### Intel GPU (Iris Xe, UHD Graphics)
