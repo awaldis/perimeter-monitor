@@ -114,7 +114,13 @@ pytest -v
 Cases live in `tests/video_cases.yaml`. Each one names a video, an inclusive
 0-based frame range (matching the `Frame N` lines `mon_perim.py` prints), and
 the vehicle class that must be the only active detection on every frame in
-that range. Results depend on `MODEL_PATH` in `config_local.py`.
+that range, the number of clips the live recorder must save (catches parked
+vehicles being treated as new), and a maximum clip length (catches parked
+vehicles being recorded the whole time they're parked). All checks are optional. Results depend on `MODEL_PATH` in
+`config_local.py`.
+
+`tests/test_stall_tracker.py` has fast unit tests for the stall logic that
+need no video or model (`pytest tests/test_stall_tracker.py`).
 
 The videos are not in git (`input_4K/` by default); cases whose video is
 missing are skipped. `pytest` is installed from `requirements-dev.txt`.

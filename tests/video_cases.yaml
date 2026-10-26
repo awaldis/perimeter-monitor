@@ -1,8 +1,14 @@
 # Video regression cases for tests/test_video_cases.py.
 #
-# Each case runs the whole video through FramePipeline (the same per-frame
-# logic as live monitoring). Within [start_frame, end_frame] the only active
-# (non-stalled) vehicle class on every frame must be expected_class.
+# Each case runs the whole video through FramePipeline and the clip recorder
+# (the same logic as live monitoring). Optional checks, use either or both:
+#   start_frame/end_frame/expected_class: within [start_frame, end_frame] the
+#     only active (non-stalled) vehicle class on every frame must be
+#     expected_class.
+#   clips: exact number of clips the live recorder saves. A vehicle that is
+#     wrongly treated as new again shows up as an extra clip.
+#   max_clip_seconds: no saved clip (and its screenshots) may be longer than
+#     this. Catches parked vehicles being recorded the whole time they're parked.
 #
 # Frame numbers are 0-based and inclusive, matching the "Frame N" lines that
 # mon_perim.py prints. Videos are not in git; missing files are skipped.
@@ -14,8 +20,16 @@ cases:
     start_frame: 98
     end_frame: 143
     expected_class: usmail_truck
+    clips: 1
 
   - file: single_pickup_north_snow_5_seconds.mp4
     start_frame: 21
     end_frame: 28
     expected_class: pickup_truck
+    clips: 1
+
+  # Parked car at the left edge whose detection flickers on and off. It must
+  # be recorded once when first seen, then ignored once stalled.
+  - file: blue_car_parked_off_left_first_117_frames.mp4
+    clips: 1
+    max_clip_seconds: 7   # STALL_SECONDS (5) + CLIP_BUFFER_SECONDS (1) + 1 s slack

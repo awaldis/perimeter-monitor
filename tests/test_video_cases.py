@@ -1,19 +1,23 @@
 """
 Video regression tests: run recorded clips through the live processing
-pipeline and check the detected vehicle class frame by frame.
+pipeline and check the detected vehicle class frame by frame, and how many
+clips the live recorder would save.
 
 Cases are listed in video_cases.yaml. Run with:
   pytest -v
 """
 
+from collections import Counter
 from pathlib import Path
 
 import cv2
 import pytest
 import yaml
 
-from config import MODEL_PATH, CONFIDENCE_THRESHOLD, DEFAULT_FPS
+from clip_recorder import ClipRecorder
+from config import MODEL_PATH, CONFIDENCE_THRESHOLD, DEFAULT_FPS, CROP_X1, CROP_X2, CROP_Y1, CROP_Y2
 from frame_pipeline import FramePipeline
+from mon_perim import record_and_alert
 from vehicle_detector import VehicleDetector
 from video_reader import VideoStreamReader
 
@@ -32,12 +36,13 @@ def load_cases():
   ]
 
 
-def run_video(video_path):
+def run_video(video_path, clips_dir):
   """
-  Run a video through a fresh pipeline, the same way mon_perim.py does.
+  Run a video through a fresh pipeline and clip recorder, the same way
+  mon_perim.py does in live mode (Telegram alerts excluded).
 
   Returns:
-    List of FrameResult, one per frame
+    Tuple of (list of FrameResult, one per frame; ClipRecorder; fps)
   """
   # Fresh detector per video: the YOLO tracker keeps state between calls
   detector = VehicleDetector(confidence=CONFIDENCE_THRESHOLD)
@@ -45,6 +50,7 @@ def run_video(video_path):
   reader = VideoStreamReader(str(video_path))
   fps = reader.get(cv2.CAP_PROP_FPS) or DEFAULT_FPS
   pipeline = FramePipeline(detector, fps)
+  recorder = ClipRecorder(str(clips_dir), fps, CROP_X2 - CROP_X1, CROP_Y2 - CROP_Y1)
   reader.start()
 
   results = []
@@ -54,13 +60,15 @@ def run_video(video_path):
       if not success:
         break
       result = pipeline.process(frame)
+      record_and_alert(result, recorder)
       # Drop the images so a long video doesn't hold every frame in memory
       result.cropped_frame = None
       result.annotated_frame = None
       results.append(result)
   finally:
     reader.stop()
-  return results
+    recorder.close()
+  return results, recorder, fps
 
 
 def describe(result):
@@ -74,29 +82,78 @@ def describe(result):
   return line
 
 
-@pytest.mark.parametrize("case, video_path", load_cases())
-def test_video_case(case, video_path):
-  if not video_path.exists():
-    pytest.skip(f"video not found: {video_path}")
-
+def check_frame_range(case, results):
+  """Return failure text if expected_class isn't the only active class on every frame in range."""
   start, end = case["start_frame"], case["end_frame"]
   expected = case["expected_class"]
-  print(f"\nmodel={MODEL_PATH} conf={CONFIDENCE_THRESHOLD} video={video_path.name}")
-
-  results = run_video(video_path)
-  assert end < len(results), (
-    f"end_frame {end} is past the end of the video ({len(results)} frames)"
-  )
+  if end >= len(results):
+    return f"end_frame {end} is past the end of the video ({len(results)} frames)"
 
   failures = [
     r for r in results[start:end + 1]
     if set(r.active_detections_by_class) != {expected}
   ]
-  if failures:
-    checked = end - start + 1
-    pytest.fail(
-      f"expected only '{expected}' on frames {start}-{end}; "
-      f"{len(failures)} of {checked} frames failed:\n"
-      + "\n".join(describe(r) for r in failures),
-      pytrace=False
-    )
+  if not failures:
+    return None
+  return (
+    f"expected only '{expected}' on frames {start}-{end}; "
+    f"{len(failures)} of {end - start + 1} frames failed:\n"
+    + "\n".join(describe(r) for r in failures)
+  )
+
+
+def check_clip_count(case, results, recorder):
+  """Return failure text if the recorder didn't save exactly the expected number of clips."""
+  expected = case["clips"]
+  actual = recorder.get_clip_count()
+  if actual == expected:
+    return None
+
+  # Show the frames where a vehicle became active after none were
+  starts = [
+    describe(r) for prev, r in zip([None] + results, results)
+    if r.active_vehicle_detected and (prev is None or not prev.active_vehicle_detected)
+  ]
+  return (
+    f"expected {expected} clip(s), recorder saved {actual}. "
+    f"Frames where an active vehicle appeared:\n" + "\n".join(starts)
+  )
+
+
+def check_clip_lengths(case, clips_dir, fps):
+  """Return failure text if any saved clip is longer than max_clip_seconds."""
+  limit = case["max_clip_seconds"]
+  # The recorder saves one screenshot per clip frame, named {clip}_{NNNN}.jpg
+  frames_by_clip = Counter(
+    jpg.stem.rsplit("_", 1)[0] for jpg in Path(clips_dir).glob("*/images/*.jpg")
+  )
+  too_long = {
+    clip: frames / fps for clip, frames in frames_by_clip.items()
+    if frames / fps > limit
+  }
+  if not too_long:
+    return None
+  return f"clips longer than {limit} s: " + ", ".join(
+    f"{clip} ({seconds:.1f} s)" for clip, seconds in sorted(too_long.items())
+  )
+
+
+@pytest.mark.parametrize("case, video_path", load_cases())
+def test_video_case(case, video_path, tmp_path):
+  if not video_path.exists():
+    pytest.skip(f"video not found: {video_path}")
+
+  print(f"\nmodel={MODEL_PATH} conf={CONFIDENCE_THRESHOLD} video={video_path.name}")
+  results, recorder, fps = run_video(video_path, tmp_path)
+
+  problems = []
+  if "expected_class" in case:
+    problems.append(check_frame_range(case, results))
+  if "clips" in case:
+    problems.append(check_clip_count(case, results, recorder))
+  if "max_clip_seconds" in case:
+    problems.append(check_clip_lengths(case, tmp_path, fps))
+  problems = [p for p in problems if p]
+
+  if problems:
+    pytest.fail("\n\n".join(problems), pytrace=False)

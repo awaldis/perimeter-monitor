@@ -186,6 +186,28 @@ def print_timing_stats(loop_times, read_times, process_times):
       print(f"{label:<20} {'N/A':>10} {'N/A':>10} {'N/A':>10} {0:>10}")
 
 
+def record_and_alert(result, recorder, alerter=None):
+  """
+  Live-mode side effects for one processed frame: record clips and send alerts.
+
+  Shared with the video test rig so it exercises the same recording logic.
+
+  Args:
+    result: FrameResult from FramePipeline.process()
+    recorder: ClipRecorder
+    alerter: TelegramAlerter, or None to skip alerts
+  """
+  if result.active_vehicle_detected:
+    recorder.on_vehicle_detected(result.annotated_frame, result.cropped_frame, result.detections)
+
+    # Check for Telegram alerts
+    if alerter and alerter.is_enabled():
+      alerter.check_and_alert(result.active_detections_by_class, result.annotated_frame,
+                              result.class_ids_by_track, result.boxes_by_track)
+  else:
+    recorder.on_no_vehicle(result.annotated_frame, result.cropped_frame, result.detections)
+
+
 def main():
   args = parse_args()
 
@@ -323,15 +345,7 @@ def main():
 
       # Handle recording and alerts
       if is_rtsp:
-        if result.active_vehicle_detected:
-          recorder.on_vehicle_detected(annotated_frame, cropped_frame, detections)
-
-          # Check for Telegram alerts
-          if alerter and alerter.is_enabled():
-            alerter.check_and_alert(result.active_detections_by_class, annotated_frame,
-                                    result.class_ids_by_track, result.boxes_by_track)
-        else:
-          recorder.on_no_vehicle(annotated_frame, cropped_frame, detections)
+        record_and_alert(result, recorder, alerter)
 
         # Queue monitoring
         queue_size = reader.qsize()
