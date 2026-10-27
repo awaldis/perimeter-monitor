@@ -8,5 +8,6 @@
 -c requirements.txt
 
 fiftyone
+ipython         # labeling workflow runs in an IPython session (ipython -i start_51.py, %run -i ...)
 openvino
 pytest
