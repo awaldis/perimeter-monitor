@@ -6,6 +6,7 @@ __pycache__/
 local/
 *.pt
 *.onnx
+models/
 clips/
 config_local.py
 *:Zone.Identifier

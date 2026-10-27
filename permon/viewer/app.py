@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Detection Viewer V2 - Web-based detection viewer for FiftyOne-compatible structure.
 
@@ -15,9 +14,9 @@ Directory structure:
           ├── car_2026-01-22T14-30-45_0001.txt
           └── car_2026-01-22T14-30-45_0002.txt
 
-Usage:
-  python detection_viewer_v2.py [--days N]
-  Then open http://localhost:8081 in a browser
+Usage (from the repo root):
+  python -m permon.viewer [--days N]
+  Then open http://localhost:8081 (VIEWER_PORT) in a browser
 """
 
 import argparse
@@ -34,11 +33,7 @@ from flask import Flask, Response, jsonify, render_template, abort
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-# Import local configuration for clips directory (with fallback)
-try:
-  from config_local import CLIPS_DIR
-except ImportError:
-  CLIPS_DIR = "clips"
+from permon.config import CLIPS_DIR, VIEWER_PORT
 
 # Date cutoff for filtering old detections (set in main() from --days arg)
 cutoff_date = None  # YYYY-MM-DD string or None for no filtering
@@ -343,7 +338,7 @@ def start_polling():
 @app.route('/')
 def index():
   """Serve the main viewer page."""
-  return render_template('viewer_v2.html')
+  return render_template('viewer.html')
 
 
 @app.route('/events')
@@ -468,7 +463,8 @@ def main():
   """Main entry point."""
   global cutoff_date
 
-  parser = argparse.ArgumentParser(description='Detection Viewer V2 - Web-based detection viewer')
+  parser = argparse.ArgumentParser(prog='python -m permon.viewer',
+                                   description='Detection Viewer V2 - Web-based detection viewer')
   parser.add_argument('-d', '--days', type=int, default=None,
                       help='Only show detections from the last N days')
   args = parser.parse_args()
@@ -500,16 +496,13 @@ def main():
   print("Starting polling thread...")
   start_polling()
 
-  # Start Flask server on port 8081 (different from v1)
-  print(f"\nStarting web server on http://0.0.0.0:8081")
+  # Start Flask server
+  print(f"\nStarting web server on http://0.0.0.0:{VIEWER_PORT}")
   print("Press Ctrl+C to stop\n")
 
   try:
-    app.run(host='0.0.0.0', port=8081, threaded=True)
+    app.run(host='0.0.0.0', port=VIEWER_PORT, threaded=True)
   finally:
     observer.stop()
     observer.join()
 
-
-if __name__ == '__main__':
-  main()

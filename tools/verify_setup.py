@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """
 Verify that the perimeter-monitor installation is working correctly.
+
+Usage (from the repo root):
+  python tools/verify_setup.py
 """
 
 import sys
+from pathlib import Path
+
+# Make the permon package importable when run as a script
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def check_import(module_name, package_name=None):
     """Try to import a module and report status."""
@@ -79,7 +86,7 @@ def main():
     # Check for YOLO model
     print("Checking for YOLO model:")
     import os
-    from config import MODEL_PATH
+    from permon.config import MODEL_PATH
     if os.path.exists(MODEL_PATH):
         print(f"  ✓ {MODEL_PATH} found")
     else:
@@ -108,7 +115,7 @@ def main():
     if all_ok:
         print("✓ Setup verification PASSED")
         print("\nYou can now run:")
-        print("  python mon_perim.py --help")
+        print("  python -m permon.monitor --help")
         return 0
     else:
         print("✗ Setup verification FAILED")

@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
 """
 Perimeter Monitor - Vehicle detection and recording system.
 
 Monitors video streams (RTSP or files) for vehicles and records clips
 when vehicles are detected.
 
-Usage:
-  RTSP stream:  python mon_perim.py "rtsp://user:pass@ip:port/stream" -d
-  Video file:   python mon_perim.py video.mp4 -d
+Usage (from the repo root):
+  RTSP stream:  python -m permon.monitor "rtsp://user:pass@ip:port/stream" -d
+  Video file:   python -m permon.monitor video.mp4 -d
 """
 
 import argparse
@@ -16,7 +15,7 @@ import os
 import time
 from datetime import datetime
 
-from config import (
+from permon.config import (
   CONFIDENCE_THRESHOLD,
   CROP_Y1, CROP_Y2, CROP_X1, CROP_X2,
   DEFAULT_FPS,
@@ -26,24 +25,20 @@ from config import (
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
   ALERT_VEHICLE_CLASSES,
-  ALERT_EDGE_MARGIN
+  ALERT_EDGE_MARGIN,
+  CLIPS_DIR
 )
-from video_reader import VideoStreamReader
-from vehicle_detector import VehicleDetector
-from clip_recorder import ClipRecorder
-from telegram_alert import TelegramAlerter
-from frame_pipeline import FramePipeline
-
-# Import local configuration for clips directory (with fallback)
-try:
-  from config_local import CLIPS_DIR
-except ImportError:
-  CLIPS_DIR = "clips"  # Default fallback if config_local.py doesn't exist
+from permon.monitor.video_reader import VideoStreamReader
+from permon.monitor.vehicle_detector import VehicleDetector
+from permon.monitor.clip_recorder import ClipRecorder
+from permon.monitor.telegram_alert import TelegramAlerter
+from permon.monitor.frame_pipeline import FramePipeline
 
 
 def parse_args():
   """Parse command line arguments."""
   parser = argparse.ArgumentParser(
+    prog='python -m permon.monitor',
     description='Perimeter monitor - Vehicle detection and recording'
   )
   parser.add_argument(
@@ -427,6 +422,3 @@ def main():
     else:
       print(f"Done! Output saved to {output_video}")
 
-
-if __name__ == "__main__":
-  main()

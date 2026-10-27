@@ -1,16 +1,23 @@
-#!/usr/bin/env python3
-"""Export a YOLOv8 .pt model to OpenVINO format."""
+"""
+Export a YOLOv8 .pt model to OpenVINO format.
+
+Usage (from the repo root):
+  python -m permon.labeling.export_openvino models/model.pt
+"""
 
 import argparse
 import sys
 from ultralytics import YOLO
 
+from permon.config import MODEL_IMGSZ
+
 
 def main():
-  parser = argparse.ArgumentParser(description="Export a YOLOv8 .pt model to OpenVINO format")
+  parser = argparse.ArgumentParser(prog="python -m permon.labeling.export_openvino",
+                                   description="Export a YOLOv8 .pt model to OpenVINO format")
   parser.add_argument("model", help="Path to the .pt model file")
-  parser.add_argument("--imgsz", type=int, nargs="+", default=[480, 1600],
-                      help="Input image size [height, width] (default: 480 1600)")
+  parser.add_argument("--imgsz", type=int, nargs="+", default=MODEL_IMGSZ,
+                      help=f"Input image size [height, width] (default: MODEL_IMGSZ, {MODEL_IMGSZ})")
   parser.add_argument("--half", action="store_true", help="Export with FP16 precision")
   args = parser.parse_args()
 

@@ -5,7 +5,7 @@ Vehicle detector using YOLOv8 for detecting and tracking vehicles.
 import torch
 from ultralytics import YOLO
 
-from config import (
+from permon.config import (
   MODEL_PATH,
   MODEL_IMGSZ,
   CONFIDENCE_THRESHOLD,

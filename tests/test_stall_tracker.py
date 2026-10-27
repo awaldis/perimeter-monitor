@@ -1,6 +1,6 @@
 """Unit tests for StallTracker (no video or model needed)."""
 
-from stall_tracker import StallTracker
+from permon.monitor.stall_tracker import StallTracker
 
 # 1 fps and 5 stall seconds -> stalled after 5 frames without movement
 STALL_FRAMES = 5

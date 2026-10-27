@@ -7,7 +7,7 @@ import cv2
 import os
 from datetime import datetime
 
-from config import CLIP_BUFFER_SECONDS, CLASS_NAMES
+from permon.config import CLIP_BUFFER_SECONDS, CLASS_NAMES
 
 
 class ClipRecorder:

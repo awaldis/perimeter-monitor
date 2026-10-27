@@ -11,7 +11,7 @@
 #     this. Catches parked vehicles being recorded the whole time they're parked.
 #
 # Frame numbers are 0-based and inclusive, matching the "Frame N" lines that
-# mon_perim.py prints. Videos are not in git; missing files are skipped.
+# the monitor prints. Videos are not in git; missing files are skipped.
 
 video_dir: input_4K   # relative to the repo root
 

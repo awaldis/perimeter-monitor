@@ -14,12 +14,12 @@ import cv2
 import pytest
 import yaml
 
-from clip_recorder import ClipRecorder
-from config import MODEL_PATH, CONFIDENCE_THRESHOLD, DEFAULT_FPS, CROP_X1, CROP_X2, CROP_Y1, CROP_Y2
-from frame_pipeline import FramePipeline
-from mon_perim import record_and_alert
-from vehicle_detector import VehicleDetector
-from video_reader import VideoStreamReader
+from permon.config import MODEL_PATH, CONFIDENCE_THRESHOLD, DEFAULT_FPS, CROP_X1, CROP_X2, CROP_Y1, CROP_Y2
+from permon.monitor.cli import record_and_alert
+from permon.monitor.clip_recorder import ClipRecorder
+from permon.monitor.frame_pipeline import FramePipeline
+from permon.monitor.vehicle_detector import VehicleDetector
+from permon.monitor.video_reader import VideoStreamReader
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CASES_FILE = Path(__file__).resolve().parent / "video_cases.yaml"
@@ -39,7 +39,7 @@ def load_cases():
 def run_video(video_path, clips_dir):
   """
   Run a video through a fresh pipeline and clip recorder, the same way
-  mon_perim.py does in live mode (Telegram alerts excluded).
+  the monitor does in live mode (Telegram alerts excluded).
 
   Returns:
     Tuple of (list of FrameResult, one per frame; ClipRecorder; fps)

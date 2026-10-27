@@ -8,12 +8,12 @@ files and sending alerts are left to the caller.
 
 from dataclasses import dataclass, field
 
-from config import (
+from permon.config import (
   CROP_Y1, CROP_Y2, CROP_X1, CROP_X2,
   STALL_SECONDS,
   STALL_MOVEMENT_THRESHOLD
 )
-from stall_tracker import StallTracker
+from permon.monitor.stall_tracker import StallTracker
 
 
 @dataclass

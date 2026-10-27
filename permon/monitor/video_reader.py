@@ -10,7 +10,7 @@ import threading
 from datetime import datetime
 from queue import Queue, Empty
 
-from config import (
+from permon.config import (
   READER_QUEUE_SIZE,
   FPS_DRAIN_FRAMES,
   FPS_MEASURE_FRAMES,
