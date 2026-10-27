@@ -64,10 +64,10 @@ echo
 echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Create clips directory
+# Create clips and models directories
 echo
-echo "Creating output directory..."
-mkdir -p clips
+echo "Creating output and model directories..."
+mkdir -p clips models
 
 echo
 echo "=== Setup Complete ==="
@@ -75,8 +75,8 @@ echo
 echo "To activate the virtual environment:"
 echo "  source venv/bin/activate"
 echo
-echo "To run the monitor:"
-echo "  python mon_perim.py -t udp \"rtsp://user:pass@ip:port/stream\""
+echo "To run the monitor (from this directory):"
+echo "  python -m permon.monitor -t udp \"rtsp://user:pass@ip:port/stream\""
 echo
 echo "For help:"
-echo "  python mon_perim.py --help"
+echo "  python -m permon.monitor --help"

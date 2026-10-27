@@ -4,10 +4,10 @@
 Use security camera video and local AI vision models to identify interesting events around my home in real time.  Store photos and video clips of these events.  Send alerts for particularly interesting events.
 
 ## Current Status
-* The real-time program (`mon_perim.py`) alerts reliably on US Mail, FedEx, UPS and Amazon trucks.
+* The real-time program (`permon.monitor`) alerts reliably on US Mail, FedEx, UPS and Amazon trucks.
 * The real-time program saves photos of these vehicles and others so that they can be used to further fine-tune the vision model.
-* A web server program (`detection_viewer_v2.py`) displays a gallery of the collected vehicle photos.
-* Integration with FiftyOne for importing, reviewing, and labeling collected photos.
+* A web server program (`permon.viewer`) displays a gallery of the collected vehicle photos.
+* Integration with FiftyOne (`permon.labeling`) for importing, reviewing, and labeling collected photos.
 
 ## Near-Term Focus
 Refinements with a single camera – see [GitHub issues](https://github.com/awaldis/perimeter-monitor/issues).

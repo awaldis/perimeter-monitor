@@ -17,36 +17,32 @@ chmod +x setup.sh
 ### 3. Verify Installation
 ```bash
 source venv/bin/activate
-python verify_setup.py
+python tools/verify_setup.py
 ```
 
 ### 4. Test Run
 ```bash
 # Test with your RTSP stream
-python mon_perim.py -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=0"
+python -m permon.monitor -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=0"
 ```
 
 ## Intel GPU Optimization (Recommended for i5-1135G7)
 
 Your target machine has **Intel Iris Xe Graphics** which supports hardware acceleration through OpenVINO.
 
-### Install OpenVINO Support
-```bash
-source venv/bin/activate
-pip install onnxruntime-openvino
-```
+OpenVINO is installed from `requirements.txt`.
 
 ### Verify OpenVINO
 ```bash
-python verify_setup.py
-# Should show: "GPU acceleration available (OpenVINO)"
+python tools/verify_setup.py
+# Should show: "Intel GPU available to OpenVINO"
 ```
 
-### Enable in Code
-The code auto-detects available execution providers, but you can verify by checking the output when running:
+### Use an OpenVINO Model
+Export the trained `.pt` model on the dev machine, copy the exported folder to
+`models/`, and point `MODEL_PATH` at it in `config_local.py`:
 ```bash
-python mon_perim.py --help
-# Will show which execution provider is being used
+python -m permon.labeling.export_openvino models/permon_2026_02_11_model.pt
 ```
 
 ## System Requirements by CPU
@@ -68,29 +64,24 @@ python mon_perim.py --help
 ### 1. Use Lower Resolution Stream
 ```bash
 # Use subtype=1 for 720p instead of subtype=0 for 4K
-python mon_perim.py -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=1"
+python -m permon.monitor -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=1"
 ```
 
 ### 2. Reduce Detection Image Size
-Edit `config.py`:
+Edit `config_local.py` (re-export OpenVINO models at the new size):
 ```python
 MODEL_IMGSZ = 640  # Default is 1280 for 4K
 ```
 
 ### 3. Increase Queue Size for Buffering
-Edit `config.py`:
+Edit `config_local.py`:
 ```python
 READER_QUEUE_SIZE = 60  # Default is 30
 ```
 
 ### 4. Use Lighter YOLO Model
-```bash
-# Download YOLOv8n (nano) if not already using it
-wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx
-
-# Or use even smaller model (faster but less accurate)
-wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.onnx
-```
+Train from a smaller base model (YOLOv8n, nano, is the smallest), or use the
+COCO `yolov8n.pt` by leaving `MODEL_PATH` unset.
 
 ## Troubleshooting on New Machine
 
@@ -105,11 +96,10 @@ pip install -r requirements.txt
 
 ### Issue: Poor Performance
 ```bash
-# Check which execution provider is being used
-python verify_setup.py
+# Check which devices OpenVINO can use
+python tools/verify_setup.py
 
-# If not using OpenVINO on Intel GPU:
-pip install onnxruntime-openvino
+# If not using an OpenVINO model on Intel GPU, export one (see above)
 ```
 
 ### Issue: "Could not open video source"
@@ -117,7 +107,7 @@ pip install onnxruntime-openvino
 # Test RTSP stream with ffplay
 ffplay -rtsp_transport udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streaming?channel=02&subtype=1"
 
-# If that works but mon_perim.py doesn't:
+# If that works but the monitor doesn't:
 # - Check firewall rules
 # - Try TCP transport: -t tcp
 # - Check camera supports multiple connections
@@ -126,23 +116,23 @@ ffplay -rtsp_transport udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streamin
 ### Issue: High CPU Usage
 This is normal for CPU-based inference. To reduce:
 1. Lower resolution (use subtype=1 or 2)
-2. Reduce MODEL_IMGSZ in config.py
-3. Skip frames: modify video_reader.py to read every 2nd frame
+2. Reduce MODEL_IMGSZ in config_local.py
+3. Skip frames: modify permon/monitor/video_reader.py to read every 2nd frame
 
 ## Files to Push to New Machine
 
 The setup.sh script will install everything, but these are the files needed:
 
 ### Required Files
-- ✓ All Python source files (*.py)
+- ✓ The permon/ package
 - ✓ setup.sh
 - ✓ requirements.in / requirements.txt
-- requirements-dev.in / requirements-dev.txt (only for FiftyOne/OpenVINO tools)
+- requirements-dev.in / requirements-dev.txt (only for the labeling workflow and tests)
 - ✓ README.md
-- ✓ config.py
+- ✓ config_local.py (machine-specific; not in git)
 
 ### Optional Files
-- yolov8n.onnx (will auto-download if missing)
+- models/ (your custom models; yolov8n.pt auto-downloads if MODEL_PATH is unset)
 - clips/ directory (will be created)
 
 ### Not Needed on New Machine
