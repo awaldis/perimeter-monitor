@@ -1,4 +1,4 @@
-# Dataset curation / model export tools (FiftyOne scripts, export_openvino.py).
+# Dataset curation / labeling tools (FiftyOne workflow) and tests.
 # Edit this file, then regenerate the lock file:
 #   uv pip compile requirements-dev.in -o requirements-dev.txt --index-strategy unsafe-best-match \
 #     --emit-index-url --no-emit-package opencv-python-headless
@@ -9,5 +9,4 @@
 
 fiftyone
 ipython         # labeling workflow runs in an IPython session (ipython -i start_51.py, %run -i ...)
-openvino
 pytest

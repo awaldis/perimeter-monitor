@@ -19,8 +19,6 @@ filelock==3.19.1
     # via torch
 flask==3.1.3
     # via -r requirements.in
-flatbuffers==25.9.23
-    # via onnxruntime
 fonttools==4.61.0
     # via matplotlib
 fsspec==2025.9.0
@@ -53,22 +51,24 @@ numpy==2.2.6
     #   contourpy
     #   lap
     #   matplotlib
-    #   onnxruntime
     #   opencv-python
+    #   openvino
     #   scipy
     #   torchvision
     #   ultralytics
     #   ultralytics-thop
-onnxruntime==1.30.0
-    # via -r requirements.in
 opencv-python==4.12.0.88
     # via
     #   -r requirements.in
     #   ultralytics
+openvino==2025.4.1
+    # via -r requirements.in
+openvino-telemetry==2025.2.0
+    # via openvino
 packaging==25.0
     # via
     #   matplotlib
-    #   onnxruntime
+    #   openvino
 pillow==11.3.0
     # via
     #   matplotlib
@@ -78,8 +78,6 @@ polars==1.35.2
     # via ultralytics
 polars-runtime-32==1.35.2
     # via polars
-protobuf==6.33.2
-    # via onnxruntime
 psutil==7.1.3
     # via ultralytics
 pyparsing==3.2.5

@@ -39,7 +39,7 @@ def main():
         ('torch', 'torch'),
         ('torchvision', 'torchvision'),
         ('ultralytics', 'ultralytics'),
-        ('onnxruntime', 'onnxruntime'),
+        ('openvino', 'openvino'),
     ]
 
     for module, package in packages:
@@ -61,30 +61,29 @@ def main():
         all_ok = False
     print()
 
-    # Check ONNX Runtime providers
-    print("Checking ONNX Runtime providers:")
+    # Check OpenVINO devices
+    print("Checking OpenVINO devices:")
     try:
-        import onnxruntime as ort
-        providers = ort.get_available_providers()
-        print(f"  Available providers: {', '.join(providers)}")
-        if 'CUDAExecutionProvider' in providers:
-            print("  ✓ GPU acceleration available (CUDA)")
-        elif 'OpenVINOExecutionProvider' in providers:
-            print("  ✓ GPU acceleration available (OpenVINO)")
+        import openvino as ov
+        devices = ov.Core().available_devices
+        print(f"  Available devices: {', '.join(devices)}")
+        if any(d.startswith('GPU') for d in devices):
+            print("  ✓ Intel GPU available to OpenVINO")
         else:
-            print("  ℹ Using CPU execution (consider installing onnxruntime-openvino for Intel GPU)")
+            print("  ℹ Using CPU execution")
     except Exception as e:
-        print(f"  ✗ Error checking ONNX Runtime: {e}")
+        print(f"  ✗ Error checking OpenVINO: {e}")
         all_ok = False
     print()
 
     # Check for YOLO model
     print("Checking for YOLO model:")
     import os
-    if os.path.exists('yolov8n.onnx'):
-        print("  ✓ yolov8n.onnx found")
+    from config import MODEL_PATH
+    if os.path.exists(MODEL_PATH):
+        print(f"  ✓ {MODEL_PATH} found")
     else:
-        print("  ℹ yolov8n.onnx not found (will auto-download on first run)")
+        print(f"  ℹ {MODEL_PATH} not found (yolov8n.pt auto-downloads on first run; set MODEL_PATH in config_local.py)")
     print()
 
     # Check OpenCV capabilities

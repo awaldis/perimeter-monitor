@@ -35,8 +35,7 @@ sudo apt-get install -y \
 if lspci | grep -i "intel.*graphics" > /dev/null; then
     echo
     echo "Intel GPU detected!"
-    echo "For better performance, consider using ONNX Runtime with OpenVINO."
-    echo "See: https://onnxruntime.ai/docs/execution-providers/OpenVINO-ExecutionProvider.html"
+    echo "OpenVINO (installed from requirements.txt) can run OpenVINO-format models on it."
 fi
 
 # Create virtual environment
@@ -64,16 +63,6 @@ pip install --upgrade pip
 echo
 echo "Installing Python dependencies..."
 pip install -r requirements.txt
-
-# Download YOLO model if not present
-echo
-echo "Checking for YOLO model..."
-if [ ! -f "yolov8n.onnx" ]; then
-    echo "YOLO model not found. It will be downloaded on first run."
-    echo "Or download manually: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx"
-else
-    echo "YOLO model found: yolov8n.onnx"
-fi
 
 # Create clips directory
 echo

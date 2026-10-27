@@ -178,24 +178,18 @@ numpy==2.2.6
     #   imageio
     #   matplotlib
     #   opencv-python-headless
-    #   openvino
     #   pandas
     #   scikit-image
     #   scikit-learn
     #   scipy
     #   tifffile
     #   voxel51-eta
-openvino==2025.4.1
-    # via -r requirements-dev.in
-openvino-telemetry==2025.2.0
-    # via openvino
 packaging==25.0
     # via
     #   -c requirements.txt
     #   fiftyone
     #   lazy-loader
     #   matplotlib
-    #   openvino
     #   plotly
     #   pytest
     #   scikit-image

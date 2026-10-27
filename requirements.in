@@ -1,4 +1,4 @@
-# Runtime dependencies for perimeter-monitor (monitor, detection viewers).
+# Runtime dependencies for perimeter-monitor (monitor, detection viewer).
 # This is the source of truth -- edit this file, then regenerate the lock file:
 #   uv pip compile requirements.in -o requirements.txt --index-strategy unsafe-best-match --emit-index-url
 # Dataset/training tools live in requirements-dev.in.
@@ -10,7 +10,7 @@ torch
 torchvision
 ultralytics
 lap             # needed by ultralytics tracker (model.track); not auto-installed
-onnxruntime
+openvino        # runtime for the OpenVINO model folders the monitor loads
 opencv-python
 requests
 pyyaml
