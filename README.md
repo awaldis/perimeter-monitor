@@ -309,7 +309,7 @@ The two expensive stages can each move to other hardware, in
 | Setting | Stage | Values |
 |---------|-------|--------|
 | `INFERENCE_DEVICE` | inference | OpenVINO models: `"AUTO"`, `"CPU"`, `"GPU"` (Intel graphics), `"NPU"`. `.pt` models: `"cpu"`, `"cuda:0"` |
-| `DECODE_HWACCEL` | decode | Experimental. `None` (software), `"qsv"` (Intel Quick Sync), `"cuda"` (NVIDIA). Falls back to software if unavailable |
+| `DECODE_HWACCEL` | decode | Experimental. `None` (software), `"qsv"` (Intel Quick Sync), `"cuda"` (NVIDIA). Falls back to software and logs FFmpeg's reason if it can't be used |
 | `DECODE_THREADS` | decode | `1` decodes in the reader thread (exact timing, least total CPU); `0` uses every core (faster per frame, competes with inference) |
 | `DECODER` | receive–convert | `"pyav"` or `"opencv"` |
 
@@ -408,6 +408,29 @@ sudo apt-get update && sudo apt-get upgrade ffmpeg
 2. Use an OpenVINO model, and try the Hardware Settings above
 3. Lower frame rate in camera settings
 4. Reduce input resolution using camera's substream
+
+### Hardware Decoding Isn't Used
+With `DECODE_HWACCEL` set, the log says either `Hardware decoding active: ...`
+or `Hardware decoder ... failed: <FFmpeg's reason>`. To check the machine
+itself, independently of this program:
+
+```bash
+# 1. Is the GPU's video driver working, and does it decode HEVC?
+sudo apt-get install vainfo
+vainfo | grep -i hevc        # want: VAProfileHEVCMain : VAEntrypointVLD  (VLD = decode)
+
+# 2. Can this user reach the GPU?
+ls -l /dev/dri/renderD128 && groups      # want: your user in the 'render' group
+
+# 3. Does hardware decoding work, and is it faster? Compare the two "bench:" lines
+ffmpeg -hide_banner -benchmark -i video.mp4 -f null -
+ffmpeg -hide_banner -benchmark -hwaccel vaapi -i video.mp4 -f null -
+```
+
+If `vainfo` fails or lists no HEVC decode, install the driver
+(`intel-media-va-driver` or `intel-media-va-driver-non-free`). `"qsv"` also
+needs Intel's VPL runtime (`libmfx-gen1.2`). If step 3 works but `"qsv"`
+still fails here, the limit is PyAV's bundled FFmpeg, not the machine.
 
 ### RTSP Connection Issues
 - Check network connectivity: `ping <camera-ip>`

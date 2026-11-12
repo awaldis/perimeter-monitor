@@ -36,7 +36,10 @@ INFERENCE_DEVICE = "AUTO"
 # Video decoding
 DECODER = "pyav"               # "pyav": FFmpeg via PyAV, each step separate. "opencv": cv2.VideoCapture
 DECODE_THREADS = 1             # FFmpeg decoder threads: 1 = in the reader thread, 0 = every core
-DECODE_HWACCEL = None          # Hardware decoder for "pyav": None (software), "qsv" (Intel), "cuda" (NVIDIA)
+# Hardware decoder for "pyav": None (software), "qsv" (Intel Quick Sync) or
+# "cuda" (NVIDIA). Falls back to software, logging FFmpeg's reason, if the
+# hardware, its driver or its runtime library is missing.
+DECODE_HWACCEL = None
 
 # Recording settings
 CLIPS_DIR = "clips"            # Where clips and screenshots are saved (and the viewer reads)

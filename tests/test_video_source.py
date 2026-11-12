@@ -97,6 +97,26 @@ def test_nv12_frames_give_same_pixels(video_path):
   assert compared == FRAMES
 
 
+def test_unavailable_hardware_decoder_falls_back_without_losing_frames(video_path, capsys):
+  """h264_qsv exists in FFmpeg but fails without Intel hardware; software takes over."""
+  source = PyAVSource(video_path, CROP, hwaccel="qsv")
+  frames = read_all(source)
+  assert_same_frames(frames, read_all(PyAVSource(video_path, CROP)))
+  if not source.hwaccel_active:
+    # The log says why, in FFmpeg's words
+    assert "Hardware decoder h264_qsv failed" in capsys.readouterr().out
+
+
+def test_dedicated_decoder_path(video_path, capsys, monkeypatch):
+  """Run the separate-decoder path with the software decoder standing in for hardware."""
+  monkeypatch.setattr(PyAVSource, "_dedicated_decoder_name", lambda self, codec_name: codec_name)
+  source = PyAVSource(video_path, CROP, hwaccel="qsv")
+  frames = read_all(source)
+  assert source.hwaccel_active
+  assert "Hardware decoding active: h264" in capsys.readouterr().out
+  assert_same_frames(frames, read_all(PyAVSource(video_path, CROP)))
+
+
 def test_stream_facts(video_path):
   for source in (PyAVSource(video_path, CROP), OpenCVSource(video_path, CROP)):
     assert source.open()

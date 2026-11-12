@@ -139,6 +139,8 @@ def main():
   source.close()
 
   measured = len(m.wall["inference"])
+  # Hardware decoding is only confirmed once frames have decoded
+  print(f"Video decoding used: {source.describe()}")
   if measured == 0:
     print("Not enough frames to measure.")
     return 1

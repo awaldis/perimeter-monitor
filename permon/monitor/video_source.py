@@ -63,6 +63,12 @@ class PyAVSource:
   PLANAR_FORMATS = ("yuv420p", "yuvj420p")
   CROPPABLE_FORMATS = PLANAR_FORMATS + ("nv12",)
 
+  # FFmpeg offers hardware decoding in two ways. Some device types plug into
+  # the normal decoder (cuda): av.open() is told which device to use. Others
+  # are separate decoders named <codec>_<type>, such as hevc_qsv for Intel
+  # Quick Sync: those are created here and fed the packets directly.
+  DEDICATED_DECODER_TYPES = ("qsv",)
+
   def __init__(self, src, crop, is_live=False, rtsp_transport='tcp', timer=None,
                threads=DECODE_THREADS, hwaccel=DECODE_HWACCEL):
     """
@@ -95,7 +101,13 @@ class PyAVSource:
     self.height = 0
     self.fps = 0.0          # Frame rate from the stream metadata (0 if unknown)
     self.frame_count = 0    # Total frames, for files (0 if unknown)
+
+    # Hardware decoding state: _hw_decoder is a dedicated decoder (see
+    # DEDICATED_DECODER_TYPES); hwaccel_active turns True once hardware
+    # decoding is known to work
     self.hwaccel_active = False
+    self._hw_decoder = None
+    self._hw_pending = []   # Packets sent to an unconfirmed hardware decoder
 
     # Chroma planes are half size, so the region can only be cut straight
     # from the planes if its edges are on even pixels
@@ -109,7 +121,10 @@ class PyAVSource:
       options['rtsp_transport'] = self.rtsp_transport
       # (open, read): give up on a silent stream so the reader can reconnect
       timeout = (RTSP_TIMEOUT_SECONDS, RTSP_TIMEOUT_SECONDS)
-    hwaccel = HWAccel(device_type=self.hwaccel, allow_software_fallback=True) if self.hwaccel else None
+    dedicated = self.hwaccel in self.DEDICATED_DECODER_TYPES
+    hwaccel = None
+    if self.hwaccel and not dedicated:
+      hwaccel = HWAccel(device_type=self.hwaccel, allow_software_fallback=True)
 
     try:
       self.container = av.open(self.src, options=options, timeout=timeout, hwaccel=hwaccel)
@@ -131,9 +146,34 @@ class PyAVSource:
     self.fps = float(stream.average_rate) if stream.average_rate else 0.0
     self.frame_count = stream.frames
     self._codec_description = f"{codec.name} {codec.pix_fmt}"
-    # False if hardware decoding was requested but FFmpeg fell back to software
-    self.hwaccel_active = bool(self.hwaccel) and bool(codec.is_hwaccel)
+
+    self._hw_decoder = None
+    self._hw_pending = []
+    if dedicated:
+      # Whether it works is only known once it decodes a frame
+      self.hwaccel_active = False
+      self._hw_decoder = self._create_dedicated_decoder(stream)
+    else:
+      # False if hardware decoding was requested but FFmpeg fell back to software
+      self.hwaccel_active = bool(self.hwaccel) and bool(codec.is_hwaccel)
     return True
+
+  def _dedicated_decoder_name(self, codec_name):
+    """Name of FFmpeg's separate hardware decoder for a codec, e.g. hevc_qsv."""
+    return f"{codec_name}_{self.hwaccel}"
+
+  def _create_dedicated_decoder(self, stream):
+    """Create the separate hardware decoder for this stream, or None if FFmpeg has none."""
+    name = self._dedicated_decoder_name(stream.codec_context.name)
+    try:
+      decoder = av.CodecContext.create(name, "r")
+      # Stream headers (parameter sets) the decoder needs before the first packet
+      decoder.extradata = stream.codec_context.extradata
+    except (av.error.FFmpegError, ValueError) as e:
+      _log(f"Hardware decoder {name} is not in this FFmpeg build ({e}); using software decoding")
+      return None
+    self._hw_name = name
+    return decoder
 
   @property
   def is_open(self):
@@ -142,7 +182,9 @@ class PyAVSource:
   def describe(self):
     """One line saying how this source decodes."""
     if self.hwaccel_active:
-      how = f"hardware ({self.hwaccel})"
+      how = f"hardware ({self._hw_name if self._hw_decoder else self.hwaccel})"
+    elif self._hw_decoder is not None:
+      how = f"hardware ({self._hw_name}) requested; confirmed or refused when the first frame decodes"
     else:
       how = "software, " + ("all cores" if self.threads == 0 else f"{self.threads} thread(s)")
       if self.hwaccel:
@@ -180,12 +222,55 @@ class PyAVSource:
       Usually one frame; none while a multi-threaded decoder fills its
       pipeline or if the packet was damaged.
     """
+    if self._hw_decoder is not None:
+      return self._decode_dedicated(packet)
     try:
       return packet.decode()
     except av.error.InvalidDataError:
       # Damaged packet (UDP loss, joining mid-stream): skip it
       self.decode_errors += 1
       return []
+
+  def _decode_dedicated(self, packet):
+    """
+    Decode with the dedicated hardware decoder (see DEDICATED_DECODER_TYPES).
+
+    Until it has produced a frame the decoder is unconfirmed: the packets it
+    was given are kept, and if it fails they are decoded in software instead,
+    so no frames are lost. The failure is logged with FFmpeg's own reason.
+    """
+    if self.hwaccel_active:
+      try:
+        return self._hw_decoder.decode(packet)
+      except av.error.InvalidDataError:
+        self.decode_errors += 1
+        return []
+      except av.error.FFmpegError as e:
+        _log(f"Hardware decoder {self._hw_name} failed ({e}); switching to software decoding")
+        self._hw_decoder = None
+        self.hwaccel_active = False
+        return self.decode(packet)
+
+    self._hw_pending.append(packet)
+    # Collect FFmpeg's error messages: the exception alone doesn't say why
+    av.logging.set_level(av.logging.ERROR)
+    try:
+      with av.logging.Capture() as ffmpeg_log:
+        frames = self._hw_decoder.decode(packet)
+    except av.error.FFmpegError as e:
+      reasons = [message.strip() for _, _, message in ffmpeg_log] or [str(e)]
+      _log(f"Hardware decoder {self._hw_name} failed: {'; '.join(reasons)}. Using software decoding")
+      self._hw_decoder = None
+      pending, self._hw_pending = self._hw_pending, []
+      return [frame for unconfirmed in pending for frame in self.decode(unconfirmed)]
+    finally:
+      av.logging.set_level(None)
+
+    if frames:
+      self.hwaccel_active = True
+      self._hw_pending = []
+      _log(f"Hardware decoding active: {self._hw_name}, frames arrive as {frames[0].format.name}")
+    return frames
 
   def crop(self, frame):
     """
