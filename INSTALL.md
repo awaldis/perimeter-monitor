@@ -45,6 +45,18 @@ Export the trained `.pt` model on the dev machine, copy the exported folder to
 python -m permon.labeling.export_openvino models/permon_2026_02_11_model.pt
 ```
 
+### Measure Each Stage
+`tools/benchmark_stages.py` times every pipeline stage by itself on this
+machine, and lets you try the GPU for inference and for video decoding before
+changing `config_local.py` (see "Processing Pipeline" in README.md):
+```bash
+python tools/benchmark_stages.py path/to/video.mp4
+python tools/benchmark_stages.py path/to/video.mp4 --device GPU
+python tools/benchmark_stages.py path/to/video.mp4 --hwaccel qsv
+```
+The Intel GPU needs its compute runtime for inference
+(`sudo apt-get install intel-opencl-icd`).
+
 ## System Requirements by CPU
 
 ### Intel i5-1135G7 (Your Target)
@@ -70,13 +82,13 @@ python -m permon.monitor -t udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/str
 ### 2. Reduce Detection Image Size
 Edit `config_local.py` (re-export OpenVINO models at the new size):
 ```python
-MODEL_IMGSZ = 640  # Default is 1280 for 4K
+MODEL_IMGSZ = [320, 1056]  # [height, width]; default is [480, 1600]
 ```
 
 ### 3. Increase Queue Size for Buffering
 Edit `config_local.py`:
 ```python
-READER_QUEUE_SIZE = 60  # Default is 30
+READER_QUEUE_SIZE = 10  # Default is 3
 ```
 
 ### 4. Use Lighter YOLO Model
@@ -99,6 +111,9 @@ pip install -r requirements.txt
 # Check which devices OpenVINO can use
 python tools/verify_setup.py
 
+# See which stage is slow
+python tools/benchmark_stages.py path/to/video.mp4
+
 # If not using an OpenVINO model on Intel GPU, export one (see above)
 ```
 
@@ -117,7 +132,7 @@ ffplay -rtsp_transport udp "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/rtsp/streamin
 This is normal for CPU-based inference. To reduce:
 1. Lower resolution (use subtype=1 or 2)
 2. Reduce MODEL_IMGSZ in config_local.py
-3. Skip frames: modify permon/monitor/video_reader.py to read every 2nd frame
+3. Lower the camera's frame rate
 
 ## Files to Push to New Machine
 

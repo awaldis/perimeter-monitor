@@ -27,3 +27,8 @@ CLIPS_DIR = "/mnt/nas/perimeter_clips"
 #  7: 'amazon_truck',
 #}
 #VEHICLE_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7]
+
+# Hardware (see "Processing Pipeline" in README.md; measure with
+# tools/benchmark_stages.py before changing these)
+#INFERENCE_DEVICE = "GPU"     # Run an OpenVINO model on Intel graphics
+#DECODE_HWACCEL = "qsv"       # Decode video on Intel graphics (experimental)

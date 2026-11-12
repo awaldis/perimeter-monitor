@@ -27,15 +27,18 @@ permon/
 ├── config.py               - Shared settings (overridden by config_local.py)
 ├── monitor/                - Real-time processing
 │   ├── cli.py              -   Entry point (python -m permon.monitor)
-│   ├── video_reader.py     -   Threaded video capture with RTSP reconnect
-│   ├── frame_pipeline.py   -   Per-frame crop, detect, track, stall filter (shared with tests)
-│   ├── vehicle_detector.py -   YOLO wrapper
+│   ├── video_source.py     -   Stages: receive, decode, crop, convert (PyAV/FFmpeg)
+│   ├── video_reader.py     -   Reader thread, frame queue, RTSP reconnect
+│   ├── vehicle_detector.py -   Stages: preprocess, inference, nms, track, annotate
+│   ├── inference.py        -   Inference engines (OpenVINO, PyTorch) and devices
+│   ├── frame_pipeline.py   -   Per-frame detect, track, stall filter (shared with tests)
 │   ├── stall_tracker.py    -   Parked vehicle detection
 │   ├── clip_recorder.py    -   Clip and screenshot recording
-│   └── telegram_alert.py   -   Telegram alerts
+│   ├── telegram_alert.py   -   Telegram alerts
+│   └── timing.py           -   Stage list and per-stage timing report
 ├── viewer/                 - Web gallery (python -m permon.viewer)
 └── labeling/               - FiftyOne session, dataset helpers, model export
-tools/                      - Standalone utilities (verify_setup.py, rtsp_viewer.py)
+tools/                      - Standalone utilities (verify_setup.py, benchmark_stages.py, rtsp_viewer.py)
 tests/                      - Unit and video regression tests
 models/                     - Model files (not in git)
 archive/                    - Obsolete code kept for reference
@@ -116,7 +119,7 @@ with [uv](https://docs.astral.sh/uv/):
 
 | Source (edit this)    | Lock file (generated)  | Contents                             |
 |-----------------------|------------------------|--------------------------------------|
-| `requirements.in`     | `requirements.txt`     | Runtime: monitor, viewer, OpenVINO   |
+| `requirements.in`     | `requirements.txt`     | Runtime: monitor, viewer, OpenVINO, PyAV |
 | `requirements-dev.in` | `requirements-dev.txt` | Labeling (FiftyOne, IPython), pytest |
 
 `uv.toml` sets `index-strategy = "unsafe-best-match"` so uv considers both PyPI
@@ -222,6 +225,98 @@ training, convert the model to OpenVINO for the monitor:
 python -m permon.labeling.export_openvino models/permon_2026_02_11_model.pt
 ```
 
+## Processing Pipeline
+
+Each frame goes through a fixed series of stages. Every stage is one method
+with a documented input and output, and every stage is timed.
+
+| Stage | Thread | Input → output | Code |
+|-------|--------|----------------|------|
+| receive | reader | network/file → compressed packet (HEVC, a few kB) | `PyAVSource.receive` |
+| decode | reader | packet → full frame in the camera's YUV 4:2:0 format (3840x2160, 12 MB) | `PyAVSource.decode` |
+| crop | reader | full frame → detection region, still YUV (1600x480) | `PyAVSource.crop` |
+| convert | reader | YUV region → BGR image, `(480, 1600, 3)` uint8 | `PyAVSource.convert` |
+| *(queue)* | | reader thread hands the image to the main thread | `VideoStreamReader` |
+| preprocess | main | BGR image → RGB tensor, `(1, 3, 480, 1600)` float32 0–1 | `VehicleDetector.preprocess` |
+| inference | main | tensor → raw YOLO output, `(1, 4 + classes, 15750)`: one box and class scores per candidate | `VehicleDetector.infer` |
+| nms | main | raw output → detection boxes (confidence filter, then non-maximum suppression) | `VehicleDetector.nms` |
+| track | main | detection boxes → boxes with track IDs (BoT-SORT) | `VehicleDetector.track` |
+| stall filter | main | drop parked vehicles | `StallTracker.update` |
+| annotate | main | draw boxes on a copy of the image | `VehicleDetector.annotate` |
+| record | main | write the clip frame, screenshot and label; send alerts | `ClipRecorder`, `TelegramAlerter` |
+
+Decoding uses FFmpeg's libraries directly through [PyAV](https://pyav.org),
+so the region is cropped before colour conversion and only 4% of a 4K frame is
+ever converted. OpenCV is still used to draw, display, and write clips and
+JPEGs, and ultralytics needs it, but it is no longer in the video input path.
+(`DECODER = "opencv"` switches back to `cv2.VideoCapture`, which gives the
+same pixels with receive, decode and whole-frame conversion fused into one
+step.)
+
+### Stage Timing
+
+The monitor prints a stage table when it exits (Ctrl+C in RTSP mode), and
+every `TIMING_REPORT_INTERVAL_SECONDS` if that is set:
+
+```
+Stage            Thread    Median     Mean      p95      Max    Calls  Budget
+-----------------------------------------------------------------------------
+receive          reader      0.08     0.12     0.30     1.40      192
+decode           reader     37.14    60.23   219.11   286.66      191   41.3%
+crop             reader      0.52     0.89     2.32     7.77      190    0.6%
+convert          reader      1.91     2.93     7.35    13.48      190    2.0%
+wait for frame   main        0.02     0.61     0.04   112.06      191
+preprocess       main        5.01     5.46     9.95    18.60      190    3.7%
+inference        main      209.33   226.86   341.12   417.08      190  155.4%
+...
+reader thread work                   64.05  (mean, excluding 'receive')  = 44% of budget
+main thread work                    259.44  (mean, excluding 'wait for frame')  = 178% of budget
+Frame budget at 6.85 fps: 146.0 ms. Fastest sustainable rate: 3.9 fps.
+Process CPU: 178.0 s over 50.0 s = 3.56 cores busy on average
+```
+
+How to read it:
+- **Budget** is the stage's share of the time between camera frames
+  (1/fps). The reader and main threads run in parallel, so each thread's
+  total must stay under 100% for the monitor to keep up. (The example is a
+  slow laptop that can't: inference alone needs 155%.)
+- **wait for frame** is the main thread's idle time. In RTSP mode a healthy
+  system spends most of the budget here; near zero means it is falling
+  behind.
+- **Process CPU** counts every thread, including the inference workers the
+  stage rows can't see.
+
+For clean per-stage costs, `tools/benchmark_stages.py` runs the same stage
+code one stage at a time, with nothing else competing, and adds the CPU time
+each stage uses:
+
+```bash
+python tools/benchmark_stages.py input_4K/video.mp4
+python tools/benchmark_stages.py input_4K/video.mp4 --device GPU      # Intel graphics
+python tools/benchmark_stages.py input_4K/video.mp4 --hwaccel qsv     # hardware decode
+python tools/benchmark_stages.py input_4K/video.mp4 --decode-threads 0
+```
+
+Its last lines say how many cores' worth of CPU the pipeline needs to keep up
+with the camera, which is the number to compare against the machine's cores
+when deciding whether there is room for more processing.
+
+### Hardware Settings
+
+The two expensive stages can each move to other hardware, in
+`config_local.py`:
+
+| Setting | Stage | Values |
+|---------|-------|--------|
+| `INFERENCE_DEVICE` | inference | OpenVINO models: `"AUTO"`, `"CPU"`, `"GPU"` (Intel graphics), `"NPU"`. `.pt` models: `"cpu"`, `"cuda:0"` |
+| `DECODE_HWACCEL` | decode | Experimental. `None` (software), `"qsv"` (Intel Quick Sync), `"cuda"` (NVIDIA). Falls back to software if unavailable |
+| `DECODE_THREADS` | decode | `1` decodes in the reader thread (exact timing, least total CPU); `0` uses every core (faster per frame, competes with inference) |
+| `DECODER` | receive–convert | `"pyav"` or `"opencv"` |
+
+The startup lines `Running inference with:` and `Video decoding:` show what
+is actually in use. A new inference backend is a class with an `infer()`
+method in `permon/monitor/inference.py`.
+
 ## Configuration
 
 Settings live in `permon/config.py`. Override any of them for a machine in
@@ -229,6 +324,7 @@ Settings live in `permon/config.py`. Override any of them for a machine in
 `config_local_template.py`). Common ones:
 
 - **Model**: `MODEL_PATH`, `CLASS_NAMES`, `VEHICLE_CLASSES`, `CONFIDENCE_THRESHOLD`
+- **Hardware**: `INFERENCE_DEVICE`, `DECODE_HWACCEL`, `DECODE_THREADS`, `DECODER` (see Hardware Settings)
 - **Output**: `CLIPS_DIR` (clips and screenshots; the viewer reads it too)
 - **Detection region**: `CROP_X1, CROP_X2, CROP_Y1, CROP_Y2`
 - **Recording duration**: `CLIP_BUFFER_SECONDS` (buffer after last detection)
@@ -236,7 +332,7 @@ Settings live in `permon/config.py`. Override any of them for a machine in
 - **Alerts**: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `ALERT_VEHICLE_CLASSES`
 - **Ports**: `VIEWER_PORT`, `FIFTYONE_PORT`
 - **Queue size**: `READER_QUEUE_SIZE` (frame buffer size)
-- **Status update interval**: `STATUS_INTERVAL_SECONDS`
+- **Status update interval**: `STATUS_INTERVAL_SECONDS`, `TIMING_REPORT_INTERVAL_SECONDS`
 
 ## Output
 
@@ -254,9 +350,9 @@ per day:
 
 ## Testing
 
-Video regression tests run recorded clips through `FramePipeline`
-(`permon/monitor/frame_pipeline.py`), the same per-frame detection, tracking,
-and stall filtering that live monitoring uses:
+Video regression tests run recorded clips through the same reader and
+`FramePipeline` (`permon/monitor/frame_pipeline.py`) that live monitoring
+uses, so they cover every stage from decoding to stall filtering:
 
 ```bash
 pytest -v
@@ -270,8 +366,9 @@ vehicles being treated as new), and a maximum clip length (catches parked
 vehicles being recorded the whole time they're parked). All checks are optional. Results depend on `MODEL_PATH` in
 `config_local.py`.
 
-`tests/test_stall_tracker.py` has fast unit tests for the stall logic that
-need no video or model (`pytest tests/test_stall_tracker.py`).
+The other test files are fast unit tests that need no camera video or model:
+`test_stall_tracker.py` (stall logic), `test_video_source.py` (decoding,
+cropping and reconnecting, on a generated video) and `test_timing.py`.
 
 The videos are not in git (`input_4K/` by default); cases whose video is
 missing are skipped. `pytest` is installed from `requirements-dev.txt`.
@@ -282,12 +379,15 @@ missing are skipped. `pytest` is installed from `requirements-dev.txt`.
 
 Export the model to OpenVINO format (see Labeling Workflow) and point
 `MODEL_PATH` at the exported folder. `python tools/verify_setup.py` lists the
-devices OpenVINO can use.
+devices OpenVINO can use; `"GPU"` only appears once Intel's compute runtime
+(`intel-opencl-icd`) is installed. Set `INFERENCE_DEVICE = "GPU"` to run the
+network on the integrated graphics, and `DECODE_HWACCEL = "qsv"` to decode
+video on it. Compare with `tools/benchmark_stages.py` before and after.
 
 ### NVIDIA GPU
 
 If moving to a system with NVIDIA GPU, install the CUDA build of PyTorch and
-use a `.pt` model:
+use a `.pt` model (`INFERENCE_DEVICE = "cuda:0"`, `DECODE_HWACCEL = "cuda"`):
 
 ```bash
 pip uninstall torch torchvision
@@ -302,11 +402,12 @@ This is a threading issue with older FFmpeg. Upgrade FFmpeg:
 sudo apt-get update && sudo apt-get upgrade ffmpeg
 ```
 
-### Poor Performance on Intel GPU
-1. Verify Intel GPU is detected: `lspci | grep -i graphics`
-2. Use an OpenVINO model (see GPU Configuration)
-3. Reduce input resolution using camera's substream
-4. Lower frame rate in camera settings
+### Poor Performance
+1. Read the stage table the monitor prints at exit, or run
+   `tools/benchmark_stages.py`, to see which stage is using the frame budget
+2. Use an OpenVINO model, and try the Hardware Settings above
+3. Lower frame rate in camera settings
+4. Reduce input resolution using camera's substream
 
 ### RTSP Connection Issues
 - Check network connectivity: `ping <camera-ip>`
@@ -327,4 +428,5 @@ MIT License - See LICENSE file for details
 
 - YOLOv8: Ultralytics (https://github.com/ultralytics/ultralytics)
 - OpenVINO: Intel (https://github.com/openvinotoolkit/openvino)
+- PyAV and FFmpeg (https://github.com/PyAV-Org/PyAV, https://ffmpeg.org)
 - FiftyOne: Voxel51 (https://github.com/voxel51/fiftyone)
