@@ -20,8 +20,8 @@ class StallTracker:
       movement_threshold: Normalized distance below which movement is ignored.
       fps: Frames per second, used to convert stall_seconds to frame count.
       forget_frames: Frames a track may go undetected before its state is
-        dropped. Defaults to 30, matching how long the ByteTrack tracker
-        keeps a lost track's ID.
+        dropped. Defaults to 30, matching how long the tracker keeps a
+        lost track's ID (track_buffer in vehicle_detector.py).
     """
     self.movement_threshold = movement_threshold
     self.stall_frames = int(stall_seconds * fps)

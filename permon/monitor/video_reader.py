@@ -1,21 +1,26 @@
 """
 Threaded video stream reader for efficient frame capture.
 Supports both video files and RTSP streams.
+
+A background thread runs the video source's stages (receive, decode, crop,
+convert; see video_source.py) and queues the cropped BGR images, so decoding
+overlaps with detection in the main thread.
 """
 
-import cv2
 import time
-import os
 import threading
 from datetime import datetime
 from queue import Queue, Empty
 
 from permon.config import (
+  CROP_X1, CROP_Y1, CROP_X2, CROP_Y2,
   READER_QUEUE_SIZE,
   FPS_DRAIN_FRAMES,
   FPS_MEASURE_FRAMES,
   RECONNECT_DELAY_SECONDS
 )
+from permon.monitor.timing import StageTimer
+from permon.monitor.video_source import create_video_source
 
 
 class VideoStreamReader:
@@ -24,7 +29,7 @@ class VideoStreamReader:
   Continuously reads frames in a background thread and stores them in a queue.
   """
 
-  def __init__(self, src, queue_size=READER_QUEUE_SIZE, is_rtsp=False, rtsp_transport='tcp'):
+  def __init__(self, src, queue_size=READER_QUEUE_SIZE, is_rtsp=False, rtsp_transport='tcp', timer=None):
     """
     Initialize the video stream reader.
 
@@ -33,13 +38,14 @@ class VideoStreamReader:
       queue_size: Maximum number of frames to buffer
       is_rtsp: Whether source is an RTSP stream
       rtsp_transport: 'tcp' or 'udp' for RTSP streams
+      timer: StageTimer that records the reader-thread stage times
     """
-    # Remember source config so the stream can be reopened after a drop
-    self.src = src
     self.is_rtsp = is_rtsp
-    self.rtsp_transport = rtsp_transport
-
-    self._open_stream()
+    self.timer = timer or StageTimer()
+    self.source = create_video_source(
+      src, (CROP_X1, CROP_Y1, CROP_X2, CROP_Y2), is_rtsp, rtsp_transport, self.timer
+    )
+    self.source.open()
 
     self.queue = Queue(maxsize=queue_size)
     self.stopped = False
@@ -51,18 +57,6 @@ class VideoStreamReader:
     self.last_frame_time = None
     self.measured_fps = None
 
-  def _open_stream(self):
-    """Create the video capture for this source (also used when reconnecting)."""
-    if self.is_rtsp:
-      if self.rtsp_transport == 'tcp':
-        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
-        self.stream = cv2.VideoCapture(self.src, cv2.CAP_FFMPEG)
-      else:
-        self.stream = cv2.VideoCapture(self.src)
-      self.stream.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    else:
-      self.stream = cv2.VideoCapture(self.src)
-
   def start(self):
     """Start the background thread for reading frames."""
     self._thread = threading.Thread(target=self._reader, daemon=True)
@@ -73,10 +67,10 @@ class VideoStreamReader:
     """Background thread that continuously reads frames."""
     while not self.stopped:
       if not self.queue.full():
-        ret, frame = self.stream.read()
+        frame = self.source.read()
         frame_arrival_time = time.time()  # Timestamp AFTER read completes
 
-        if not ret:
+        if frame is None:
           # For files a failed read means end of video - stop normally.
           if not self.is_rtsp:
             self.read_error = True
@@ -84,7 +78,7 @@ class VideoStreamReader:
             return
 
           # For RTSP the server may have gone quiet (FFmpeg gives up after its
-          # internal read timeout). Reconnect instead of killing the reader.
+          # read timeout). Reconnect instead of killing the reader.
           if not self._reconnect():
             return
           continue
@@ -104,7 +98,7 @@ class VideoStreamReader:
             self.measured_fps = 1.0 / avg_interval if avg_interval > 0 else None
 
         self.last_frame_time = frame_arrival_time
-        self.queue.put((ret, frame))
+        self.queue.put((True, frame))
       else:
         # Queue is full, wait a bit before trying again
         time.sleep(0.001)
@@ -124,22 +118,15 @@ class VideoStreamReader:
         attempt += 1
         self._log(f"Stream read failed - reconnect attempt {attempt}")
 
-        try:
-          self.stream.release()
-        except Exception:
-          pass  # Already dead; nothing to salvage
-
-        self._open_stream()
+        self.source.close()
 
         # Opening an RTSP URL can succeed while no data flows, so require an
         # actual frame before declaring the stream healthy again.
-        if self.stream.isOpened():
-          ret, _ = self.stream.read()
-          if ret:
-            self._log(f"Reconnected after {attempt} attempt(s)")
-            # Don't let the outage gap skew the measured FPS
-            self.last_frame_time = None
-            return True
+        if self.source.open() and self.source.read() is not None:
+          self._log(f"Reconnected after {attempt} attempt(s)")
+          # Don't let the outage gap skew the measured FPS
+          self.last_frame_time = None
+          return True
 
         self._log(f"Reconnect failed - retrying in {RECONNECT_DELAY_SECONDS:g}s")
         self._sleep_unless_stopped(RECONNECT_DELAY_SECONDS)
@@ -167,7 +154,7 @@ class VideoStreamReader:
     like end-of-stream to the caller.
 
     Returns:
-      Tuple of (success, frame) like cv2.VideoCapture.read()
+      Tuple of (success, frame), where frame is the cropped BGR image
     """
     while True:
       # Only report failure once the buffer is drained and the reader is done
@@ -192,11 +179,27 @@ class VideoStreamReader:
     """
     if self.reconnecting:
       return True
-    return self.stream.isOpened()
+    return self.source.is_open
 
-  def get(self, prop):
-    """Get a property from the video stream."""
-    return self.stream.get(prop)
+  @property
+  def width(self):
+    """Full frame width, before cropping."""
+    return self.source.width
+
+  @property
+  def height(self):
+    """Full frame height, before cropping."""
+    return self.source.height
+
+  @property
+  def fps(self):
+    """Frame rate reported by the source metadata (0 if unknown)."""
+    return self.source.fps
+
+  @property
+  def frame_count(self):
+    """Total frames in a file source (0 if unknown)."""
+    return self.source.frame_count
 
   def get_measured_fps(self):
     """
@@ -222,8 +225,7 @@ class VideoStreamReader:
     # Discard frames to clear any internal buffers
     print(f"  Discarding {drain_frames} frames to clear buffers...")
     for _ in range(drain_frames):
-      ret, _ = self.stream.read()
-      if not ret:
+      if self.source.read() is None:
         return None
 
     # Now measure actual frame intervals
@@ -232,9 +234,9 @@ class VideoStreamReader:
     last_time = None
 
     for i in range(num_frames):
-      ret, _ = self.stream.read()
+      frame = self.source.read()
       now = time.time()
-      if not ret:
+      if frame is None:
         break
       if last_time is not None:
         intervals.append(now - last_time)
@@ -254,4 +256,7 @@ class VideoStreamReader:
     # This prevents segfault from releasing stream while thread is reading
     if hasattr(self, '_thread') and self._thread.is_alive():
       self._thread.join(timeout=2.0)
-    self.stream.release()
+      if self._thread.is_alive():
+        # Still blocked on a silent stream; leave it to die with the process
+        return
+    self.source.close()

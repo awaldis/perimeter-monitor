@@ -11,7 +11,8 @@ torchvision
 ultralytics
 lap             # needed by ultralytics tracker (model.track); not auto-installed
 openvino        # runtime for the OpenVINO model folders the monitor loads
-opencv-python
+opencv-python   # display, clip/JPEG writing, image ops (also required by ultralytics)
+av              # PyAV: FFmpeg bindings for receiving and decoding video
 requests
 pyyaml
 flask

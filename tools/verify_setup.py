@@ -42,6 +42,7 @@ def main():
     print("Checking required packages:")
     packages = [
         ('cv2', 'opencv-python'),
+        ('av', 'av (PyAV)'),
         ('numpy', 'numpy'),
         ('torch', 'torch'),
         ('torchvision', 'torchvision'),
@@ -91,6 +92,19 @@ def main():
         print(f"  ✓ {MODEL_PATH} found")
     else:
         print(f"  ℹ {MODEL_PATH} not found (yolov8n.pt auto-downloads on first run; set MODEL_PATH in config_local.py)")
+    print()
+
+    # Check video decoding
+    print("Checking video decoding (PyAV/FFmpeg):")
+    try:
+        import av
+        from av.codec.hwaccel import hwdevices_available
+        print(f"  PyAV version: {av.__version__}")
+        print(f"  Hardware decoder types in this build: {', '.join(hwdevices_available()) or 'none'}")
+        print("  ℹ Set DECODE_HWACCEL to try one; tools/benchmark_stages.py --hwaccel shows if it works")
+    except Exception as e:
+        print(f"  ✗ Error checking PyAV: {e}")
+        all_ok = False
     print()
 
     # Check OpenCV capabilities

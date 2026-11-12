@@ -20,6 +20,7 @@ from permon.config import (
   CROP_Y1, CROP_Y2, CROP_X1, CROP_X2,
   DEFAULT_FPS,
   STATUS_INTERVAL_SECONDS,
+  TIMING_REPORT_INTERVAL_SECONDS,
   QUEUE_WARNING_INTERVAL,
   CLASS_NAMES,
   TELEGRAM_BOT_TOKEN,
@@ -33,6 +34,7 @@ from permon.monitor.vehicle_detector import VehicleDetector
 from permon.monitor.clip_recorder import ClipRecorder
 from permon.monitor.telegram_alert import TelegramAlerter
 from permon.monitor.frame_pipeline import FramePipeline
+from permon.monitor.timing import StageTimer
 
 
 def parse_args():
@@ -70,18 +72,20 @@ def parse_args():
   return parser.parse_args()
 
 
-def setup_video_reader(video_source, is_rtsp, rtsp_transport):
+def setup_video_reader(video_source, is_rtsp, rtsp_transport, timer):
   """Initialize video reader and measure FPS (for RTSP only)."""
   print("Initializing video reader...")
   reader = VideoStreamReader(
     video_source,
     is_rtsp=is_rtsp,
-    rtsp_transport=rtsp_transport
+    rtsp_transport=rtsp_transport,
+    timer=timer
   )
 
   if not reader.isOpened():
     print(f"Error: Could not open video source {video_source}")
     return None, None
+  print(f"Video decoding: {reader.source.describe()}")
 
   # For RTSP: measure actual FPS (stream metadata is often wrong)
   # For files: use embedded FPS from file metadata
@@ -102,8 +106,8 @@ def setup_video_reader(video_source, is_rtsp, rtsp_transport):
 
 def validate_frame_size(reader, crop_x1, crop_x2, crop_y1, crop_y2):
   """Validate frame dimensions are sufficient for crop region."""
-  frame_width = int(reader.get(cv2.CAP_PROP_FRAME_WIDTH))
-  frame_height = int(reader.get(cv2.CAP_PROP_FRAME_HEIGHT))
+  frame_width = reader.width
+  frame_height = reader.height
   print(f"Stream resolution: {frame_width}x{frame_height}")
 
   if frame_width < crop_x2 or frame_height < crop_y2:
@@ -118,7 +122,7 @@ def validate_frame_size(reader, crop_x1, crop_x2, crop_y1, crop_y2):
 
 def determine_fps(reader, measured_fps, is_rtsp):
   """Determine output FPS from measured or reported values."""
-  reported_fps = reader.get(cv2.CAP_PROP_FPS)
+  reported_fps = reader.fps
 
   if is_rtsp:
     # RTSP mode: prefer measured FPS over reported
@@ -157,28 +161,6 @@ def print_file_status(current_fps, frame_count, total_frames):
     print(f"FPS: {current_fps:.2f} | {percent_complete:.1f}% complete")
   else:
     print(f"FPS: {current_fps:.2f} | % complete: N/A")
-
-
-def print_timing_stats(loop_times, read_times, process_times):
-  """Print performance timing statistics."""
-  print("\nPerformance Timing Statistics:")
-  print(f"{'Metric':<20} {'Min (ms)':>10} {'Max (ms)':>10} {'Avg (ms)':>10} {'Frames':>10}")
-  print("-" * 62)
-
-  stats = [
-    ("Loop time", loop_times),
-    ("reader.read()", read_times),
-    ("pipeline.process()", process_times)
-  ]
-
-  for label, times in stats:
-    if times:
-      min_ms = min(times) * 1000
-      max_ms = max(times) * 1000
-      avg_ms = (sum(times) / len(times)) * 1000
-      print(f"{label:<20} {min_ms:>10.2f} {max_ms:>10.2f} {avg_ms:>10.2f} {len(times):>10}")
-    else:
-      print(f"{label:<20} {'N/A':>10} {'N/A':>10} {'N/A':>10} {0:>10}")
 
 
 def record_and_alert(result, recorder, alerter=None):
@@ -236,12 +218,15 @@ def main():
   print(f"Confidence threshold: {args.confidence}")
   print(f"Live display: {'enabled' if args.display else 'disabled'}")
 
+  # Every stage of the pipeline records its time here (see timing.py)
+  timer = StageTimer()
+
   # Initialize detector
-  detector = VehicleDetector(confidence=args.confidence)
+  detector = VehicleDetector(confidence=args.confidence, timer=timer)
 
   # Initialize video reader
   reader, measured_fps = setup_video_reader(
-    video_source, is_rtsp, args.rtsp_transport
+    video_source, is_rtsp, args.rtsp_transport, timer
   )
   if reader is None:
     return
@@ -252,7 +237,7 @@ def main():
     return
 
   # Print frame info (only for file mode - RTSP streams don't have total frames)
-  total_frames = int(reader.get(cv2.CAP_PROP_FRAME_COUNT))
+  total_frames = reader.frame_count
   if not is_rtsp and total_frames > 0:
     print(f"Total frames in input: {total_frames}")
 
@@ -304,31 +289,24 @@ def main():
   fps_start_time = time.time()
   fps_counter = 0
   overall_start_time = time.time()
-  loop_times = []
-  read_times = []
-  process_times = []
 
   # RTSP-specific state
   if is_rtsp:
     last_status_time = time.time()
+    last_timing_report_time = time.time()
     last_queue_warning_time = 0
 
   try:
     while reader.isOpened():
-      loop_start = time.time()
-
-      # Read frame
-      read_start = time.time()
-      success, frame = reader.read()
-      read_times.append(time.time() - read_start)
+      # Get the next cropped frame from the reader thread
+      with timer.stage("wait for frame"):
+        success, frame = reader.read()
 
       if not success:
         break
 
-      # Crop, detect, track, and filter out stalled vehicles
-      process_start = time.time()
+      # Detect, track, and filter out stalled vehicles
       result = pipeline.process(frame)
-      process_times.append(time.time() - process_start)
 
       annotated_frame = result.annotated_frame
       cropped_frame = result.cropped_frame
@@ -340,7 +318,8 @@ def main():
 
       # Handle recording and alerts
       if is_rtsp:
-        record_and_alert(result, recorder, alerter)
+        with timer.stage("record"):
+          record_and_alert(result, recorder, alerter)
 
         # Queue monitoring
         queue_size = reader.qsize()
@@ -350,17 +329,18 @@ def main():
           print(f"[{timestamp}] WARNING: Processing too slow! {queue_size} frames buffered")
           last_queue_warning_time = current_time
       else:
-        out.write(annotated_frame)
+        with timer.stage("record"):
+          out.write(annotated_frame)
 
-        # Save training frame (JPEG + YOLO annotation)
-        frame_basename = f"frame_{frame_count:06d}"
-        jpg_path = os.path.join(training_frames_dir, f"{frame_basename}.jpg")
-        txt_path = os.path.join(training_frames_dir, f"{frame_basename}.txt")
+          # Save training frame (JPEG + YOLO annotation)
+          frame_basename = f"frame_{frame_count:06d}"
+          jpg_path = os.path.join(training_frames_dir, f"{frame_basename}.jpg")
+          txt_path = os.path.join(training_frames_dir, f"{frame_basename}.txt")
 
-        cv2.imwrite(jpg_path, cropped_frame)
-        with open(txt_path, 'w') as f:
-          for class_id, x, y, w, h, conf in detections:
-            f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f} {conf:.6f}\n")
+          cv2.imwrite(jpg_path, cropped_frame)
+          with open(txt_path, 'w') as f:
+            for class_id, x, y, w, h, conf in detections:
+              f.write(f"{class_id} {x:.6f} {y:.6f} {w:.6f} {h:.6f} {conf:.6f}\n")
 
       # Status updates
       if is_rtsp:
@@ -372,6 +352,11 @@ def main():
           last_status_time = current_time
         else:
           fps_counter += 1
+
+        if (TIMING_REPORT_INTERVAL_SECONDS > 0
+            and current_time - last_timing_report_time >= TIMING_REPORT_INTERVAL_SECONDS):
+          print(timer.report(fps))
+          last_timing_report_time = current_time
       else:
         fps_counter += 1
         if fps_counter >= 10:
@@ -385,14 +370,14 @@ def main():
 
       # Display
       if args.display:
-        cv2.imshow('Perimeter Monitor', annotated_frame)
-        key = cv2.waitKey(1) & 0xFF
+        with timer.stage("display"):
+          cv2.imshow('Perimeter Monitor', annotated_frame)
+          key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
           print("\nQuitting...")
           break
 
       frame_count += 1
-      loop_times.append(time.time() - loop_start)
 
   except KeyboardInterrupt:
     print("\nStopping early...")
@@ -415,7 +400,7 @@ def main():
       overall_fps = frame_count / total_time
       print(f"Overall FPS: {overall_fps:.2f} (processed {frame_count} frames)")
 
-    print_timing_stats(loop_times, read_times, process_times)
+    print(timer.report(fps))
 
     if is_rtsp:
       print(f"Done! {recorder.get_clip_count()} clip(s) saved to {recorder.get_output_dir()}")

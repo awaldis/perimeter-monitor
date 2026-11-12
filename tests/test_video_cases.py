@@ -10,7 +10,6 @@ Cases are listed in video_cases.yaml. Run with:
 from collections import Counter
 from pathlib import Path
 
-import cv2
 import pytest
 import yaml
 
@@ -48,7 +47,7 @@ def run_video(video_path, clips_dir):
   detector = VehicleDetector(confidence=CONFIDENCE_THRESHOLD)
 
   reader = VideoStreamReader(str(video_path))
-  fps = reader.get(cv2.CAP_PROP_FPS) or DEFAULT_FPS
+  fps = reader.fps or DEFAULT_FPS
   pipeline = FramePipeline(detector, fps)
   recorder = ClipRecorder(str(clips_dir), fps, CROP_X2 - CROP_X1, CROP_Y2 - CROP_Y1)
   reader.start()
