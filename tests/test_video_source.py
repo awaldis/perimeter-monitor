@@ -12,7 +12,12 @@ import pytest
 from permon.monitor import video_reader
 from permon.monitor.timing import StageTimer
 from permon.monitor.video_reader import VideoStreamReader
-from permon.monitor.video_source import OpenCVSource, PyAVSource, create_video_source
+from permon.monitor.video_source import (
+  OpenCVSource,
+  PyAVSource,
+  create_video_source,
+  mask_credentials,
+)
 
 WIDTH, HEIGHT, FRAMES, FPS = 320, 240, 12, 10
 CROP = (40, 20, 240, 180)       # x1, y1, x2, y2; all even
@@ -140,6 +145,13 @@ def test_open_failure_does_not_log_stream_credentials(capsys):
   output = capsys.readouterr().out
   assert "Could not open video source" in output
   assert "secretpw" not in output and "someuser" not in output
+
+
+def test_mask_credentials():
+  masked = mask_credentials("Video source: rtsp://someuser:secretpw@192.168.1.5:554/stream1")
+  assert masked == "Video source: rtsp://***@192.168.1.5:554/stream1"
+  assert mask_credentials("rtsp://192.168.1.5:554/stream1") == "rtsp://192.168.1.5:554/stream1"
+  assert mask_credentials("input_4K/clip.mp4") == "input_4K/clip.mp4"
 
 
 def test_create_video_source_selects_decoder(video_path):

@@ -1,5 +1,6 @@
 import cv2
 import argparse
+import re
 import time
 
 def main():
@@ -12,7 +13,9 @@ def main():
 
   rtsp_url = args.rtsp_url
 
-  print(f"Connecting to RTSP stream: {rtsp_url}")
+  # Keep the user:password part of the URL off the screen
+  shown_url = re.sub(r"://[^/@\s]+@", "://***@", rtsp_url)
+  print(f"Connecting to RTSP stream: {shown_url}")
   print(f"Transport protocol: {args.transport}")
 
   # Configure OpenCV to use the specified transport protocol
@@ -29,7 +32,7 @@ def main():
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
   if not cap.isOpened():
-    print(f"Error: Could not connect to RTSP stream {rtsp_url}")
+    print(f"Error: Could not connect to RTSP stream {shown_url}")
     print("Please check:")
     print("  - The URL is correct")
     print("  - The camera/server is reachable")

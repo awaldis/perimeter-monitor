@@ -41,12 +41,16 @@ from permon.config import (
 from permon.monitor.timing import StageTimer
 
 
+def mask_credentials(text):
+  """Replace the user:password part of any URL in text: rtsp://***@host/..."""
+  return re.sub(r"://[^/@\s]+@", "://***@", str(text))
+
+
 def _log(message):
   """Print a timestamped source message, with any URL credentials removed."""
   timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
   # FFmpeg error text quotes the URL: keep rtsp://user:pass@host out of the log
-  message = re.sub(r"://[^/@\s]+@", "://***@", str(message))
-  print(f"[{timestamp}] {message}")
+  print(f"[{timestamp}] {mask_credentials(message)}")
 
 
 class PyAVSource:

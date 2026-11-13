@@ -30,6 +30,7 @@ from permon.config import (
   CLIPS_DIR
 )
 from permon.monitor.video_reader import VideoStreamReader
+from permon.monitor.video_source import mask_credentials
 from permon.monitor.vehicle_detector import VehicleDetector
 from permon.monitor.clip_recorder import ClipRecorder
 from permon.monitor.telegram_alert import TelegramAlerter
@@ -83,7 +84,7 @@ def setup_video_reader(video_source, is_rtsp, rtsp_transport, timer):
   )
 
   if not reader.isOpened():
-    print(f"Error: Could not open video source {video_source}")
+    print(f"Error: Could not open video source {mask_credentials(video_source)}")
     return None, None
   print(f"Video decoding: {reader.source.describe()}")
 
@@ -207,7 +208,7 @@ def main():
     output_dir = None
 
   # Print configuration
-  print(f"Video source: {video_source}")
+  print(f"Video source: {mask_credentials(video_source)}")
   if is_rtsp:
     print(f"RTSP mode: Clips will be saved on vehicle detection")
     print(f"RTSP transport: {args.rtsp_transport}")
